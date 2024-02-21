@@ -86,6 +86,6 @@ remote: Repository not found.
 fatal: repository 'https://github.com/kadencrafter78/kadencrafter78.github.io/' not found
 ```
 
-If left unfixed, this error will lead to additional errors when the `pull-all` script is run, because the folder that the script tries to move into to pull student code does not exist.
+If left unfixed, any usernames with missing repos will be skipped over when the `pull-all` script is run, but there will be text feedback in the terminal with a link to the student's GitHub account to help determine what has gone wrong for this student.
 
-🩹🩹🩹 - A simple fix for this issue can be to just remove a student's GitHub username from the `list.txt` file until you are certain they have a correctly named repository. Then you can add their username back to the `list.txt` file and re-run the `clone-all` [command](#cloning-student-repos) to clone down that student's repo into your codespace.
+🩹🩹🩹 - Once a student has correctly named their repository (or created one if they didn't have one previously), you can re-run the `clone-all` [command](#cloning-student-repos) to clone down that student's repo into your codespace.

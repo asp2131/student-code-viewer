@@ -1,12 +1,12 @@
 # student-code-viewer
 
-Scripts to allow easy viewing of student code in one location, as well text info about students that have pushed code recently
+Scripts to allow easy viewing of student code in one location, and info about students that have pushed code recently
 
 ## Getting Started
 
-To get started with this tool, create a GitHub Codespace from this repository. To easily do this, you can click the green "<> Code" button at the top of the repo, switch to the "Codespaces" tab, and click the "Create codespace on main" button.
+To get started with this tool, create a GitHub Codespace from this repository. Click the green "<> Code" button at the top of the repo, switch to the "Codespaces" tab, and click the "Create codespace on main" button.
 
-Once in the codespace, you'll want to download the "Live Server" extension (see [this slide from the setup instructions](https://docs.google.com/presentation/d/1USzVPXUQK6IWOHWi8r8_Yj0rJ8gxzvjT2mo2X27KKaU/edit#slide=id.g2a825dd5b6a_0_558)) for help downloading if needed.
+Once in the codespace, download the "Live Server" extension. See [this slide from the setup instructions](https://docs.google.com/presentation/d/1USzVPXUQK6IWOHWi8r8_Yj0rJ8gxzvjT2mo2X27KKaU/edit#slide=id.g2a825dd5b6a_0_558) for help downloading if needed.
 
 ## Adding Student GitHub Usernames
 
@@ -21,7 +21,7 @@ To clone student repositories, run the following 2 commands in the terminal:
 
 These commands will clone down all students' repositories and give you access to student work.
 
-**\*Note:** if a new student is added to a class, this command can be re-run to install the repository of any new username that has been added to the `list.txt` file.\*
+***Note:** if a new student is added to a class, this command can be re-run to install the repository of any new username that has been added to the `list.txt` file.*
 
 ## Pulling Student Code
 
@@ -67,7 +67,7 @@ In this example, you can see that two students haven't pushed code 🚩🚩🚩 
 
 This tool can be useful for helping debug student code if a student has run into an issue and pushed their code up. After running the [pull-all commands](#pulling-student-code) from the above section, you can go into any student's folder and go into the specific files of projects they are working on. You can use live server to load the project, use the console in your browser to see any error messages, and edit student code to help determine what students need to do to get past roadblocks.
 
-**\*Note:** doing this will not change student's code in their repositories in any way. You are just viewing and editing their code remotely in a separate codespace from theirs. Also, you won't be able to push code up to their repository without "Write" access, which you won't have.\*
+***Note:** doing this will not change student's code in their repositories in any way. You are just viewing and editing their code remotely in a separate codespace from theirs. Also, you won't be able to push code up to their repository without "Write" access, which you won't have.*
 
 ## Clear Any Edits to Pull Code Again
 

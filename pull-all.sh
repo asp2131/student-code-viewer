@@ -6,7 +6,10 @@ for i in $(cat < "list.txt"); do
     cd ..
 done
 
-echo "\n---------\ncommits within the last hour are below:"
+echo "\n"
+echo "---------"
+echo "\n"
+echo "commits within the last hour are below:"
 
 for i in $(cat < "list.txt"); do
     name=$(echo $i | tr -d " \t\n\r")

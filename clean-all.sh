@@ -1,5 +1,7 @@
 for i in $(cat < "list.txt"); do
-    cd $name
-    git stash
-    cd ..
+    if test -e $i; then
+        cd $i
+        git stash
+        cd ..
+    fi
 done

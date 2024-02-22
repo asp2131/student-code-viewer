@@ -10,7 +10,7 @@ Once in the codespace, download the "Live Server" extension. See [this slide fro
 
 Next, run the following command to make all scripts in the repository executable. If this command is not run, running any of the commands in the below sections will result in a permissions error. It only needs to be run the first time you are working in your Codespace.
 
-- `chmod +x \*.sh`
+- `chmod +x *.sh`
 
 ### Adding Student GitHub Usernames
 

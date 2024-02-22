@@ -70,7 +70,7 @@ In this example, you can see that two students haven't pushed code 🚧 🚧 �
 
 ## Checking Student Work + Bugs
 
-This tool can be useful for helping debug student code if a student has run into an issue and pushed their code up. After running the [pull-all commands](#pulling-student-code) from the above section, you can go into any student's folder and go into the specific files of projects they are working on. You can use live server to load the project, use the console in your browser to see any error messages, and edit student code to help determine what students need to do to get past roadblocks.
+This tool can be useful for helping debug student code if a student has run into an issue and pushed their code up. After running the [pull-all command](#pulling-student-code) from the above section, you can go into any student's folder and go into the specific files of projects they are working on. You can use live server to load the project, use the console in your browser to see any error messages, and edit student code to help determine what students need to do to get past roadblocks.
 
 _**Note:** doing this will not change student's code in their repositories in any way. You are just viewing and editing their code remotely in a separate codespace from theirs. Also, you won't be able to push code up to their repository without "Write" access, which you won't have._
 

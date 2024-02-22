@@ -82,6 +82,18 @@ After making any changes to student code, you'll want to revert their code to it
 
 ## Errors When Using these Scripts
 
+### Permissions Errors When Running Scripts
+
+If you run on of the commands (`./clone-all.sh`, `./pull-all.sh`, or `./clean-all.sh`) and get the following error in the terminal:
+
+```
+bash: permission denied: ./pull-all.sh
+```
+
+this is likely a result of not running the `chmod` command from the [Getting Started Section](#getting-started---codespace-setup). Run the given command, and then re-run the command that caused the initial permissions error.
+
+### Errors Resulting From Missing Student Repositories
+
 If a student has not properly named their repository to match the `<username>.github.io` format that creates a GitHub Pages site as described [here on GitHub](https://pages.github.com/), there may be some errors that occur when attempting to run the `clone-all` and `pull-all` scripts. If the `clone-all` script does not find a correctly named repository for a student, you'll get an error in the terminal output that looks similar to the following, and there will be no folder created for that student in your Codespace.
 
 ```
@@ -98,3 +110,7 @@ Visit https://github.com/HolaAmigo to see their existing repositories 🚩 🚩 
 ```
 
 🩹🩹🩹 - Once a student has correctly named their repository (or created one if they didn't have one previously), you can re-run the `clone-all` [command](#cloning-student-repos) to clone down that student's repo into your codespace.
+
+## Final Notes
+
+Don't try to run any `git` commands in your codespace. The three different scripts are designed to run all required git commands to track student work and determine students that have pushed code up at the end of class and those that haven't. Running any `git` commands may result in unwanted consequences 💀 💀 💀.

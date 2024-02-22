@@ -24,7 +24,7 @@ To clone student repositories, run the following command in the terminal:
 
 These commands will clone down all students' repositories and give you access to student work.
 
-**\*Note:** if a new student is added to a class, this command can be re-run to install the repository of any new username that has been added to the `list.txt` file.\*
+_**Note:** if a new student is added to a class, this command can be re-run to install the repository of any new username that has been added to the `list.txt` file._
 
 ## Pulling Student Code
 
@@ -72,7 +72,7 @@ In this example, you can see that two students haven't pushed code 🚧 🚧 �
 
 This tool can be useful for helping debug student code if a student has run into an issue and pushed their code up. After running the [pull-all commands](#pulling-student-code) from the above section, you can go into any student's folder and go into the specific files of projects they are working on. You can use live server to load the project, use the console in your browser to see any error messages, and edit student code to help determine what students need to do to get past roadblocks.
 
-**\*Note:** doing this will not change student's code in their repositories in any way. You are just viewing and editing their code remotely in a separate codespace from theirs. Also, you won't be able to push code up to their repository without "Write" access, which you won't have.\*
+_**Note:** doing this will not change student's code in their repositories in any way. You are just viewing and editing their code remotely in a separate codespace from theirs. Also, you won't be able to push code up to their repository without "Write" access, which you won't have._
 
 ## Clear Any Edits to Pull Code Again
 
@@ -90,7 +90,7 @@ If you run on of the commands (`./clone-all.sh`, `./pull-all.sh`, or `./clean-al
 bash: permission denied: ./pull-all.sh
 ```
 
-this is likely a result of not running the `chmod` command from the [Getting Started Section](#getting-started---codespace-setup). Run the given command, and then re-run the command that caused the initial permissions error.
+this is likely a result of not running the `chmod` command from the [Getting Started Section](#getting-started---codespace-setup). Run the provided command, and then re-run the command that caused the initial permissions error.
 
 ### Errors Resulting From Missing Student Repositories
 

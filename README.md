@@ -111,6 +111,28 @@ Visit https://github.com/HolaAmigo to see their existing repositories 🚩 🚩 
 
 🩹🩹🩹 - Once a student has correctly named their repository (or created one if they didn't have one previously), you can re-run the `clone-all` [command](#cloning-student-repos) to clone down that student's repo into your codespace.
 
+## Working with Multiple Classes
+
+If you have multiple classes, you can create multiple .txt files to hold your different classes in, so that you aren't getting feedback about students not having committed work that are not in your current class.
+
+By default, all three scripts will take names from the `list.txt` file, but the scripts are built to work with other files as well. The files should be named `list____.txt`, so for example if you teach a 2nd and 4th block class, you can rename the original text file to be `list2.txt` and create a new file named `list4.txt`.
+
+Instead of running `./clone-all.sh`, `./pull-all.sh`, or `./clean-all.sh` in your terminal, you'll need to run the commands as follows:
+
+- `./clone-all.sh 2` to clone repos for the list of usernames in `list2.txt`
+- `./pull-all.sh 2` to pull repos for the list of usernames in `list2.txt`
+- `./clean-all.sh 2` to cleanup edited repos for the list of usernames in `list2.txt`
+
+---
+
+- `./clone-all.sh 4` to clone repos for the list of usernames in `list4.txt`
+- `./pull-all.sh 4` to pull repos for the list of usernames in `list4.txt`
+- `./clean-all.sh 4` to cleanup edited repos for the list of usernames in `list4.txt`
+
+These example commands are passing an argument to the script, and the script is using the argument to determine the name of the text file that should be used to run through the git automation steps. You can adjust for any class that you have by creating a unique `list___.txt` file and changing the scripts accordingly.
+
+_**Note:** All students repositories will exist at the root level of the codespace. However, only the selected class will have info for its students displayed in the terminal when running the `pull-all` script._
+
 ## Final Notes
 
 Don't try to run any `git` commands in your codespace. The three different scripts are designed to run all required git commands to track student work and determine students that have pushed code up at the end of class and those that haven't. Running any `git` commands may result in unwanted consequences 💀 💀 💀.

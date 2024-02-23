@@ -23,14 +23,16 @@ echo ""
 for i in $(cat < $filename); do
     if test -e "$i"; then
         name=$(echo $i | tr -d " \t\n\r")
+        # set text to bold
         tput bold
         echo $name
+        # set text back to normal
         tput sgr0
         cd $name
         PAGER="/bin/cat"
         status=$(git log --since="1 hours ago" --date=format-local:'%a, %b %d %H:%M:%S' --pretty=format:"✅ ✅ ✅ $name has committed today! committed at %cd ✅ ✅ ✅" -1)
         if test -z "$status"; then
-            echo "🚧 🚧 🚧 $name has not committed within the last hour! 🚧 🚧 🚧"
+            echo "🚧 🚧 🚧 $name has not committed within the last hour 🚧 🚧 🚧"
             # echo -e "🚧 🚧 🚧 $name has${BOLD} not${NONE} committed within the last hour! 🚧 🚧 🚧"
         else
             echo $status

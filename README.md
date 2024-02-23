@@ -4,7 +4,7 @@ Scripts to allow easy viewing of student code in one location, and info about st
 
 ## Getting Started - Codespace Setup
 
-To get started with this tool, create a GitHub Codespace from this repository. Click the green "<> Code" button at the top of the repo, switch to the "Codespaces" tab, and click the "Create codespace on main" button.
+To get started with this tool, make sure you are signed in to GitHub and create a GitHub Codespace from this repository. Click the green "<> Code" button at the top of the repo, switch to the "Codespaces" tab, and click the "Create codespace on main" button.
 
 Once in the codespace, download the "Live Server" extension. See [this slide from the setup instructions](https://docs.google.com/presentation/d/1USzVPXUQK6IWOHWi8r8_Yj0rJ8gxzvjT2mo2X27KKaU/edit#slide=id.g2a825dd5b6a_0_558) for help downloading if needed.
 

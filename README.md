@@ -1,138 +1,125 @@
-# student-code-viewer
+# Student Code Viewer
 
-Scripts to allow easy viewing of student code in one location, and info about students that have pushed code recently
+Scripts to easily view student code in one location and track recent code submissions.
 
 ## Getting Started - Codespace Setup
 
-To get started with this tool, make sure you are signed in to GitHub and create a GitHub Codespace from this repository. Click the green "<> Code" button at the top of the repo, switch to the "Codespaces" tab, and click the "Create codespace on main" button.
+1. **Create a GitHub Codespace**:
 
-Once in the codespace, download the "Live Server" extension. See [this slide from the setup instructions](https://docs.google.com/presentation/d/1USzVPXUQK6IWOHWi8r8_Yj0rJ8gxzvjT2mo2X27KKaU/edit#slide=id.g2a825dd5b6a_0_558) for help downloading if needed.
+   - Sign in to GitHub.
+   - Click the green "<> Code" button at the top of this repository.
+   - Switch to the "Codespaces" tab.
+   - Click "Create codespace on main".
 
-Next, run the following command to make all scripts in the repository executable. If this command is not run, running any of the commands in the below sections will result in a permissions error. It only needs to be run the first time you are working in your Codespace.
+2. **Install Live Server Extension**:
 
-- `chmod +x *.sh`
+   - Download the "Live Server" extension.
+   - Refer to [this slide](https://docs.google.com/presentation/d/1USzVPXUQK6IWOHWi8r8_Yj0rJ8gxzvjT2mo2X27KKaU/edit#slide=id.g2a825dd5b6a_0_558) for installation help.
+
+3. **Make Scripts Executable**:
+   - Run the following command in the terminal to avoid permissions errors:
+     ```
+     chmod +x *.sh
+     ```
 
 ### Adding Student GitHub Usernames
 
-In the `list.txt` file, add each student's github username in a separate line. A copy-able list can be found in the main grading spreadsheet or the project links spreadsheet for your class.
+- Add each student's GitHub username to `list.txt`, one username per line.
+- You can find a copyable list in the main grading or project links spreadsheet for your class.
 
-## Cloning Student Repos
+## Cloning Student Repositories
 
-To clone student repositories, run the following command in the terminal:
+- Run this command to clone all student repositories:
+  ```
+  ./clone-all.sh
+  ```
 
-- `./clone-all.sh`
-
-These commands will clone down all students' repositories and give you access to student work.
-
-_**Note:** if a new student is added to a class, this command can be re-run to install the repository of any new username that has been added to the `list.txt` file._
+_**Note:** Re-run this command if new students are added to update the repositories._
 
 ## Pulling Student Code
 
-To get updated student code, run the following command in the terminal:
-
-- `./pull-all.sh`
-
-These commands will run `git pull` and pull students' code down from GitHub so that the code you're looking at in the workspace is up to date with what they have pushed to GitHub.
+- To update student code, run:
+  ```
+  ./pull-all.sh
+  ```
 
 ### ❗❗❗ Viewing Recent Commits ❗❗❗
 
-Running the `./pull-all.sh` command from the above step will allow you to see which students have pushed up code within the last hour. At the bottom of the output in the terminal, you'll see text output that looks similar to the following:
+- Running `./pull-all.sh` shows which students have pushed code within the last hour. The terminal output will indicate recent commits.
 
-```
-------------------
+  Example:
 
-❗❗❗❗❗❗❗❗❗❗❗❗❗❗❗
+  ```
+  commits within the last hour are below:
 
-commits within the last hour are below:
+  dkogler
+  ✅ ✅ ✅ dkogler has committed today! committed at Tue Feb 20 23:19:32 2024 +0000 ✅ ✅ ✅
 
-dkogler
-✅ ✅ ✅ dkogler has committed today! committed at Tue Feb 20 23:19:32 2024 +0000 ✅ ✅ ✅
+  CooolHandLuke
+  🚧 🚧 🚧 CooolHandLuke has not committed within the last hour! 🚧 🚧 🚧
 
-gregthompson27
-✅ ✅ ✅ gregthompson27 has committed today! committed at Tue Feb 20 23:24:09 2024 +0000 ✅ ✅ ✅
+  HolaAmigo
+  🚩 🚩 🚩 HolaAmigo does not have a matching github repo. Check with them to ensure they have named their repository correctly.
+  Visit https://github.com/HolaAmigo to see their existing repositories 🚩 🚩 🚩
+  ```
 
-CooolHandLuke
-🚧 🚧 🚧 CooolHandLuke has not committed within the last hour! 🚧 🚧 🚧
+  🔥🔥🔥 _**Tip:** Run this command at the end of a project workday to check which students haven't pushed their code._ 🔥🔥🔥
 
-susieklu
-✅ ✅ ✅ susieklu has committed today! committed at Tue Feb 20 23:23:21 2024 +0000 ✅ ✅ ✅
+## Checking Student Work and Debugging
 
-asp2131
-🚧 🚧 🚧 asp2131 has not committed within the last hour! 🚧 🚧 🚧
+- After pulling student code, you can:
+  - Navigate to any student's folder.
+  - Use Live Server to load their project.
+  - Use the browser console to view error messages.
+  - Edit student code to help them debug issues.
 
-mayukhraychauduri
-✅ ✅ ✅ mayukhraychauduri has committed today! committed at Tue Feb 20 23:27:35 2024 +0000 ✅ ✅ ✅
-```
+_**Note:** Your changes won't affect the student's repository unless you have "Write" access._
 
-In this example, you can see that two students haven't pushed code 🚧 🚧 🚧 - those with GitHub usernames `CooolHandLuke` and `asp2131` 🚧 🚧 🚧
+## Reverting Edits
 
-🔥🔥🔥 This command is extremely helpful to run at the end of a project work day to determine which students haven't pushed up code. The `./pull-all.sh` script can be run multiple times, and each time it is run the text output in the terminal will show an updated list of "commits within the last hour" if any student has pushed code since the last time you ran the `pull-all` script. 🔥🔥🔥
+- After making changes, revert student code to its original state by running:
+  ```
+  ./clean-all.sh
+  ```
 
-## Checking Student Work + Bugs
+## Handling Errors
 
-This tool can be useful for helping debug student code if a student has run into an issue and pushed their code up. After running the [pull-all command](#pulling-student-code) from the above section, you can go into any student's folder and go into the specific files of projects they are working on. You can use live server to load the project, use the console in your browser to see any error messages, and edit student code to help determine what students need to do to get past roadblocks.
+### Permissions Errors
 
-_**Note:** doing this will not change student's code in their repositories in any way. You are just viewing and editing their code remotely in a separate codespace from theirs. Also, you won't be able to push code up to their repository without "Write" access, which you won't have._
+- If you see a permissions error like:
+  ```
+  bash: permission denied: ./pull-all.sh
+  ```
+  Ensure you have run the `chmod` command from the setup section.
 
-## Clear Any Edits to Pull Code Again
+### Missing Student Repositories
 
-After making any changes to student code, you'll want to revert their code to its original state or the `pull-all` script will not work for that student. To revert **all** students' code in your Codespace, run the following command in your terminal:
+- If a repository is missing, you might see:
 
-- `./clean-all.sh`
+  ```
+  Cloning into 'HolaAmigo'...
+  remote: Repository not found.
+  fatal: repository 'https://github.com/HolaAmigo/HolaAmigo.github.io/' not found
+  ```
 
-## Errors When Using these Scripts
+  The terminal will provide feedback with a link to the student's GitHub account.
 
-### Permissions Errors When Running Scripts
-
-If you run on of the commands (`./clone-all.sh`, `./pull-all.sh`, or `./clean-all.sh`) and get the following error in the terminal:
-
-```
-bash: permission denied: ./pull-all.sh
-```
-
-this is likely a result of not running the `chmod` command from the [Getting Started Section](#getting-started---codespace-setup). Run the provided command, and then re-run the command that caused the initial permissions error.
-
-### Errors Resulting From Missing Student Repositories
-
-If a student has not properly named their repository to match the `<username>.github.io` format that creates a GitHub Pages site as described [here on GitHub](https://pages.github.com/), there may be some errors that occur when attempting to run the `clone-all` and `pull-all` scripts. If the `clone-all` script does not find a correctly named repository for a student, you'll get an error in the terminal output that looks similar to the following, and there will be no folder created for that student in your Codespace.
-
-```
-Cloning into 'HolaAmigo'...
-remote: Repository not found.
-fatal: repository 'https://github.com/HolaAmigo/HolaAmigo.github.io/' not found
-```
-
-If left unfixed, any usernames with missing repos will be skipped over when the `pull-all` script is run, but there will be text feedback in the terminal with a link to the student's GitHub account to help determine what has gone wrong for this student, that looks like the below message:
-
-```
-🚩 🚩 🚩 HolaAmigo does not have a matching github repo. Check with them to ensure they have named their repository correctly.
-Visit https://github.com/HolaAmigo to see their existing repositories 🚩 🚩 🚩
-```
-
-🩹🩹🩹 - Once a student has correctly named their repository (or created one if they didn't have one previously), you can re-run the `clone-all` [command](#cloning-student-repos) to clone down that student's repo into your codespace.
+  _**Tip:** Ensure students name their repository correctly. Re-run `./clone-all.sh` after corrections._
 
 ## Working with Multiple Classes
 
-If you have multiple classes, you can create multiple .txt files to hold your different classes in, so that you aren't getting feedback about students not having committed work that are not in your current class.
+- Create multiple `.txt` files for different classes, named as `list____.txt` (e.g., `list2.txt`, `list4.txt`).
+- Use the appropriate commands with the class number:
+  ```
+  ./clone-all.sh 2
+  ./pull-all.sh 2
+  ./clean-all.sh 2
+  ```
+  Adjust for any class by creating a unique `list___.txt` file.
 
-By default, all three scripts will take names from the `list.txt` file, but the scripts are built to work with other files as well. The files should be named `list____.txt`, so for example if you teach a 2nd and 4th block class, you can rename the original text file to be `list2.txt` and create a new file named `list4.txt`.
-
-Instead of running `./clone-all.sh`, `./pull-all.sh`, or `./clean-all.sh` in your terminal, you'll need to run the commands as follows:
-
-- `./clone-all.sh 2` to clone repos for the list of usernames in `list2.txt`
-- `./pull-all.sh 2` to pull repos for the list of usernames in `list2.txt`
-- `./clean-all.sh 2` to cleanup edited repos for the list of usernames in `list2.txt`
-
----
-
-- `./clone-all.sh 4` to clone repos for the list of usernames in `list4.txt`
-- `./pull-all.sh 4` to pull repos for the list of usernames in `list4.txt`
-- `./clean-all.sh 4` to cleanup edited repos for the list of usernames in `list4.txt`
-
-These example commands are passing an argument to the script, and the script is using the argument to determine the name of the text file that should be used to run through the git automation steps. You can adjust for any class that you have by creating a unique `list___.txt` file and changing the scripts accordingly.
-
-_**Note:** All students repositories will exist at the root level of the codespace. However, only the selected class will have info for its students displayed in the terminal when running the `pull-all` script._
+_**Note:** All student repositories will be at the root level of the codespace._
 
 ## Final Notes
 
-Don't try to run any `git` commands in your codespace. The three different scripts are designed to run all required git commands to track student work and determine students that have pushed code up at the end of class and those that haven't. Running any `git` commands may result in unwanted consequences 💀 💀 💀.
+- Avoid running `git` commands directly in the codespace.
+- The provided scripts handle all necessary `git` commands to track and update student work.

@@ -1,46 +1,65 @@
 filename="list$1.txt"
 BOLD='\033[1m'
 NONE='\033[00m'
+
+# Initialize arrays to hold usernames
+committed=()
+not_committed=()
+no_repo=()
+
+# Loop through each username in the file
 for i in $(cat < $filename); do
     if test -e "$i"; then
-        name=$(echo $i | tr -d " \t\n\r")
-        echo $name
-        cd $name
-        git pull --ff
-        echo ""
-        cd ..
-    fi
-done
+        cd $i
+    git pull --quiet
 
-echo ""
-echo "------------------"
-echo ""
-echo "❗❗❗❗❗❗❗❗❗❗❗❗❗❗❗"
-echo ""
-echo -e "${BOLD}commits within the last hour are below:"
-echo ""
-
-for i in $(cat < $filename); do
-    if test -e "$i"; then
-        name=$(echo $i | tr -d " \t\n\r")
-        # set text to bold
-        tput bold
-        echo $name
-        # set text back to normal
-        tput sgr0
-        cd $name
-        PAGER="/bin/cat"
-        status=$(git log --since="1 hours ago" --date=format-local:'%a, %b %d %H:%M:%S' --pretty=format:"✅ ✅ ✅ $name has committed today! committed at %cd ✅ ✅ ✅" -1)
-        if test -z "$status"; then
-            echo "🚧 🚧 🚧 $name has not committed within the last hour 🚧 🚧 🚧"
-            # echo -e "🚧 🚧 🚧 $name has${BOLD} not${NONE} committed within the last hour! 🚧 🚧 🚧"
+        # Check if there has been a commit within the last hour
+        git_status=$(git log --since="1 hours ago" --pretty=format:"%h" -1)
+        
+        if test -z "$git_status"; then
+            not_committed+=("$i")
         else
-            echo $status
+            committed+=("$i")
         fi
         cd ..
     else
-        echo "🚩 🚩 🚩 $i does not have a github repo that matches the expected name. Check with them to ensure they have named their repository correctly 🚩 🚩 🚩"
-        echo "🚩 🚩 🚩 Visit https://github.com/$i to see their existing repositories 🚩 🚩 🚩"
+        no_repo+=("$i")
     fi
-    echo ""
 done
+
+# Function to print a list in a box
+print_box() {
+    local title="$1"
+    shift
+    local items=("$@")
+
+    echo "\t-------------------------------------------------------------------------------"
+    printf "\t| %-69s |\n" "$title"
+    echo "\t-------------------------------------------------------------------------------"
+    for item in "${items[@]}"; do
+        printf "\t| %-75s |\n" "$item"
+    done
+    echo "\t-------------------------------------------------------------------------------"
+    echo ""
+}
+
+# Print the results in boxes
+echo ""
+echo ""
+
+if [ ${#committed[@]} -gt 0 ]; then
+    print_box "✅ ✅ ✅ These students have pushed code up in the last hour ✅ ✅ ✅" "${committed[@]}"
+else
+    echo "    ❗❗No students have pushed work up in the last hour❗❗"
+fi
+echo ""
+
+if [ ${#not_committed[@]} -gt 0 ]; then
+    print_box "🚧 🚧 🚧 These students have NOT pushed code up in the last hour 🚧 🚧 🚧" "${not_committed[@]}"
+fi
+echo ""
+
+if [ ${#no_repo[@]} -gt 0 ]; then
+    print_box "🚩 🚩 🚩 These students do not have a correctly configured repo 🚩 🚩 🚩" "${no_repo[@]}"
+fi
+echo ""

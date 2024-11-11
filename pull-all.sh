@@ -11,7 +11,7 @@ no_repo=()
 for i in $(cat < $filename); do
     if test -e "$i"; then
         cd $i
-    git pull --quiet
+        git pull --quiet
 
         # Check if there has been a commit within the last hour
         git_status=$(git log --since="1 hours ago" --pretty=format:"%h" -1)

@@ -1,125 +1,129 @@
-# Student Code Viewer
+# Student Code Viewer (scv)
 
-Scripts to easily view student code in one location and track recent code submissions.
+A CLI tool to easily manage and track student code submissions on GitHub.
 
-## Getting Started - Codespace Setup
+## Quick Install
 
-1. **Create a GitHub Codespace**:
+```bash
+# For Mac/Linux:
+curl -sSL https://raw.githubusercontent.com/asp2131/student-code-viewer/main/install.sh | bash
 
-   - Sign in to GitHub.
-   - Click the green "<> Code" button at the top of this repository.
-   - Switch to the "Codespaces" tab.
-   - Click "Create codespace on main".
+# OR install manually with Go:
+go install github.com/asp2131/student-code-viewer@latest
+```
 
-2. **Install Live Server Extension**:
+## Features
 
-   - Download the "Live Server" extension.
-   - Refer to [this slide](https://docs.google.com/presentation/d/1USzVPXUQK6IWOHWi8r8_Yj0rJ8gxzvjT2mo2X27KKaU/edit#slide=id.g2a825dd5b6a_0_558) for installation help.
+- 📚 Manage multiple classes
+- 👥 Track student repositories
+- ⏰ Monitor commit activity
+- 🔄 Bulk clone and update repositories
+- 🧹 Clean local changes
 
-3. **Make Scripts Executable**:
-   - Run the following command in the terminal to avoid permissions errors:
-     ```
-     chmod +x *.sh
-     ```
+## Prerequisites
 
-### Adding Student GitHub Usernames
+- Git installed on your system
+- GitHub Personal Access Token (for activity tracking)
 
-- Add each student's GitHub username to `list.txt`, one username per line.
-- You can find a copyable list in the main grading or project links spreadsheet for your class.
+## Usage
 
-## Cloning Student Repositories
+### First Time Setup
 
-- Run this command to clone all student repositories:
-  ```
-  ./clone-all.sh
-  ```
+```bash
+# Set your GitHub token (only needed once)
+export GITHUB_TOKEN=your_github_token_here
+scv check-activity section1
 
-_**Note:** Re-run this command if new students are added to update the repositories._
+# Token will be saved automatically for future use
+```
 
-## Pulling Student Code
+### Basic Commands
 
-- To update student code, run:
-  ```
-  ./pull-all.sh
-  ```
+```bash
+# Create a new class
+scv add-class section1
 
-### ❗❗❗ Viewing Recent Commits ❗❗❗
+# Add students to a class
+scv add-student section1 student1 student2 student3
 
-- Running `./pull-all.sh` shows which students have pushed code within the last hour. The terminal output will indicate recent commits.
+# List students in a class
+scv list-students section1
 
-  Example:
+# Check recent activity
+scv check-activity section1
 
-  ```
-  commits within the last hour are below:
+# Clone all repositories
+scv clone section1
 
-  dkogler
-  ✅ ✅ ✅ dkogler has committed today! committed at Tue Feb 20 23:19:32 2024 +0000 ✅ ✅ ✅
+# Pull latest changes
+scv pull section1
 
-  CooolHandLuke
-  🚧 🚧 🚧 CooolHandLuke has not committed within the last hour! 🚧 🚧 🚧
+# Clean local changes
+scv clean section1
+```
 
-  HolaAmigo
-  🚩 🚩 🚩 HolaAmigo does not have a matching github repo. Check with them to ensure they have named their repository correctly.
-  Visit https://github.com/HolaAmigo to see their existing repositories 🚩 🚩 🚩
-  ```
+### Activity Monitoring
 
-  🔥🔥🔥 _**Tip:** Run this command at the end of a project workday to check which students haven't pushed their code._ 🔥🔥🔥
+The `check-activity` command shows when students last pushed code:
 
-## Checking Student Work and Debugging
+```bash
+scv check-activity section1
 
-- After pulling student code, you can:
-  - Navigate to any student's folder.
-  - Use Live Server to load their project.
-  - Use the browser console to view error messages.
-  - Edit student code to help them debug issues.
+Activity Report for section1:
+----------------------------------------
+✅ student1: Last push 2h 15m ago
+🟡 student2: Last push 2d 5h ago
+⚠️ student3: Last push 5d 12h ago
 
-_**Note:** Your changes won't affect the student's repository unless you have "Write" access._
+Legend:
+✅ - Pushed within last 24 hours
+🟡 - Pushed within last 72 hours
+⚠️ - No push in over 72 hours
+❌ - Error checking activity
+```
 
-## Reverting Edits
+## GitHub Token Setup
 
-- After making changes, revert student code to its original state by running:
-  ```
-  ./clean-all.sh
-  ```
+1. Go to [GitHub Settings](https://github.com/settings/tokens)
+2. Click "Generate new token (classic)"
+3. Select the following scopes:
+   - `public_repo` (for public repositories)
+   - `repo` (if using private repositories)
+4. Copy the generated token
+5. Run any scv command and enter the token when prompted
 
-## Handling Errors
+## Configuration
 
-### Permissions Errors
+The tool stores configuration in `~/.scv.json`. You can view current settings with:
 
-- If you see a permissions error like:
-  ```
-  bash: permission denied: ./pull-all.sh
-  ```
-  Ensure you have run the `chmod` command from the setup section.
+```bash
+scv config show
+```
 
-### Missing Student Repositories
+## Error Handling
 
-- If a repository is missing, you might see:
+### Common Issues
 
-  ```
-  Cloning into 'HolaAmigo'...
-  remote: Repository not found.
-  fatal: repository 'https://github.com/HolaAmigo/HolaAmigo.github.io/' not found
-  ```
+1. **Permission Denied**
+   ```bash
+   # Make sure scv is executable
+   chmod +x /usr/local/bin/scv
+   ```
 
-  The terminal will provide feedback with a link to the student's GitHub account.
+2. **GitHub Token Not Set**
+   ```bash
+   # Set token manually
+   export GITHUB_TOKEN=your_token_here
+   ```
 
-  _**Tip:** Ensure students name their repository correctly. Re-run `./clone-all.sh` after corrections._
+3. **Repository Not Found**
+   - Check that student usernames are correct
+   - Verify repository naming convention
 
-## Working with Multiple Classes
+## Contributing
 
-- Create multiple `.txt` files for different classes, named as `list____.txt` (e.g., `list2.txt`, `list4.txt`).
-- Use the appropriate commands with the class number:
-  ```
-  ./clone-all.sh 2
-  ./pull-all.sh 2
-  ./clean-all.sh 2
-  ```
-  Adjust for any class by creating a unique `list___.txt` file.
+Contributions are welcome! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
-_**Note:** All student repositories will be at the root level of the codespace._
+## License
 
-## Final Notes
-
-- Avoid running `git` commands directly in the codespace.
-- The provided scripts handle all necessary `git` commands to track and update student work.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.

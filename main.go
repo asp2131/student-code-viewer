@@ -346,6 +346,81 @@ var pullRepos = &cobra.Command{
 	},
 }
 
+var removeStudent = &cobra.Command{
+	Use:   "remove-student [class] [username...]",
+	Short: "Remove one or more students from a class",
+	Args:  cobra.MinimumNArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		className := args[0]
+		usernames := args[1:]
+
+		var classID int
+		err := db.QueryRow("SELECT id FROM classes WHERE name = ?", className).Scan(&classID)
+		if err != nil {
+			return fmt.Errorf("class not found: %s", className)
+		}
+
+		for _, username := range usernames {
+			result, err := db.Exec("DELETE FROM students WHERE username = ? AND class_id = ?",
+				username, classID)
+			if err != nil {
+				return fmt.Errorf("failed to remove student %s: %v", username, err)
+			}
+
+			rowsAffected, _ := result.RowsAffected()
+			if rowsAffected > 0 {
+				fmt.Printf("Removed student: %s from class: %s\n", username, className)
+			} else {
+				fmt.Printf("Student not found: %s in class: %s\n", username, className)
+			}
+		}
+		return nil
+	},
+}
+
+var removeClass = &cobra.Command{
+	Use:   "remove-class [name]",
+	Short: "Remove a class and all its students",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		className := args[0]
+
+		// Start a transaction
+		tx, err := db.Begin()
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+
+		// Get class ID
+		var classID int
+		err = tx.QueryRow("SELECT id FROM classes WHERE name = ?", className).Scan(&classID)
+		if err != nil {
+			return fmt.Errorf("class not found: %s", className)
+		}
+
+		// Remove students first
+		_, err = tx.Exec("DELETE FROM students WHERE class_id = ?", classID)
+		if err != nil {
+			return fmt.Errorf("failed to remove students: %v", err)
+		}
+
+		// Remove class
+		_, err = tx.Exec("DELETE FROM classes WHERE id = ?", classID)
+		if err != nil {
+			return fmt.Errorf("failed to remove class: %v", err)
+		}
+
+		// Commit transaction
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("failed to commit changes: %v", err)
+		}
+
+		fmt.Printf("Removed class: %s and all its students\n", className)
+		return nil
+	},
+}
+
 var cleanRepos = &cobra.Command{
 	Use:   "clean [class]",
 	Short: "Clean all repositories in a class",
@@ -391,8 +466,10 @@ func main() {
 	defer db.Close()
 
 	rootCmd.AddCommand(addClass)
+	rootCmd.AddCommand(removeClass)
 	rootCmd.AddCommand(listClasses)
 	rootCmd.AddCommand(addStudent)
+	rootCmd.AddCommand(removeStudent)
 	rootCmd.AddCommand(listStudents)
 	rootCmd.AddCommand(cloneRepos)
 	rootCmd.AddCommand(pullRepos)

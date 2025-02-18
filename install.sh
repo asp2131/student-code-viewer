@@ -25,32 +25,21 @@ cd $TMP_DIR
 # Clone the repository
 echo "Downloading source code..."
 git clone https://github.com/asp2131/student-code-viewer.git
-cd scv
+cd student-code-viewer
+
+# Initialize Go module
+echo "Initializing Go module..."
+go mod init github.com/asp2131/student-code-viewer
+go mod tidy
 
 # Build the binary
 echo "Building scv..."
 go build -o scv
 
-# Determine install location
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    # macOS
-    if [[ -d "/opt/homebrew/bin" ]]; then
-        INSTALL_DIR="/opt/homebrew/bin"
-    else
-        INSTALL_DIR="/usr/local/bin"
-    fi
-elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    # Linux
-    INSTALL_DIR="/usr/local/bin"
-else
-    echo -e "${RED}Unsupported operating system${NC}"
-    exit 1
-fi
-
 # Install the binary
-echo "Installing to $INSTALL_DIR..."
-sudo mv scv "$INSTALL_DIR/"
-sudo chmod +x "$INSTALL_DIR/scv"
+echo "Installing to /usr/local/bin..."
+sudo mv scv /usr/local/bin/
+sudo chmod +x /usr/local/bin/scv
 
 # Clean up
 cd ..

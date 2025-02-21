@@ -596,11 +596,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							))
 						}
 					}
-					sb.WriteString("\nLegend:\n")
-					sb.WriteString(successStyle.Render(fmt.Sprintf("%s - Pushed within last 24 hours\n", iconSuccess)))
-					sb.WriteString(warningStyle.Render(fmt.Sprintf("%s - Pushed within last 72 hours\n", iconWarning)))
-					sb.WriteString(errorStyle.Render(fmt.Sprintf("%s - No push in over 72 hours\n", iconError)))
-					sb.WriteString(errorStyle.Render(fmt.Sprintf("%s - Error checking activity\n", iconError)))
 
 					m.output = sb.String()
 					m.state = stateOutput
@@ -629,14 +624,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 
 					sb.WriteString(fmt.Sprintf("Activity Grid for %s:\n", m.className))
-					sb.WriteString(fmt.Sprintf("%-20s", "Username"))
+					colWidth := 10
+
+					// Print header row
+					sb.WriteString(fmt.Sprintf("%-20s", "Username")) // 20 chars for username
 					for _, date := range dates {
-						sb.WriteString(fmt.Sprintf("| %-10s", date))
+						sb.WriteString(fmt.Sprintf("| %-*s", colWidth, date))
 					}
 					sb.WriteString("\n")
+
+					// Print separator row
 					sb.WriteString(fmt.Sprintf("%-20s", strings.Repeat("-", 20)))
 					for range dates {
-						sb.WriteString(fmt.Sprintf("+-%-10s", strings.Repeat("-", 10)))
+						sb.WriteString(fmt.Sprintf("+-%-*s", colWidth-1, strings.Repeat("-", colWidth-1)))
 					}
 					sb.WriteString("\n")
 
@@ -657,9 +657,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 							date := d.Format("2006-01-02")
 							if pushDates[date] {
-								sb.WriteString(fmt.Sprintf("| %-10s", successStyle.Render(iconSuccess)))
+								sb.WriteString(fmt.Sprintf("| %-*s", colWidth, successStyle.Render("✔")))
 							} else {
-								sb.WriteString(fmt.Sprintf("| %-10s", errorStyle.Render(iconError)))
+								sb.WriteString(fmt.Sprintf("| %-*s", colWidth, errorStyle.Render("✖")))
 							}
 						}
 						sb.WriteString("\n")

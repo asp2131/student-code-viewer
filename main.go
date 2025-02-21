@@ -623,11 +623,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						dates = append(dates, d.Format("Mon 01/02"))
 					}
 
-					// Create table headers
-					headers := append([]string{"Username"}, dates...)
+					// Create table columns
+					columns := []table.Column{
+						{Title: "Username", Width: 20},
+					}
+					for _, date := range dates {
+						columns = append(columns, table.Column{Title: date, Width: 10})
+					}
 
 					// Create table rows
-					var tableRows [][]string
+					var tableRows []table.Row
 					for rows.Next() {
 						var username string
 						if err := rows.Scan(&username); err != nil {
@@ -654,7 +659,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					// Create and style the table
 					t := table.New(
-						table.WithColumns(headers),
+						table.WithColumns(columns),
 						table.WithRows(tableRows),
 						table.WithFocused(false),
 						table.WithHeight(len(tableRows)),

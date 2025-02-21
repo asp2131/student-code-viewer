@@ -255,7 +255,7 @@ func initialModel() model {
 	}
 
 	// Setup list
-	l := list.New(items, list.NewDefaultDelegate(), 0, 0)
+	l := list.New(items, list.NewDefaultDelegate(), 40, 12)
 	l.Title = "Student Code Viewer"
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)

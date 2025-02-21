@@ -7,8 +7,13 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
@@ -19,14 +24,14 @@ var db *sql.DB
 // Styles
 var (
 	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color("#FF75B5"))
-
+		Bold(true).
+		Foreground(lipgloss.Color("#FF75B5"))
+	
 	successStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#04B575"))
-
+		Foreground(lipgloss.Color("#04B575"))
+	
 	errorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#FF0000"))
+		Foreground(lipgloss.Color("#FF0000"))
 )
 
 type GithubEvent struct {
@@ -224,7 +229,7 @@ var checkLastPush = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		className := args[0]
-
+		
 		rows, err := db.Query(`
 			SELECT s.username 
 			FROM students s
@@ -253,7 +258,7 @@ var checkLastPush = &cobra.Command{
 			}
 
 			timeSince := time.Since(lastPush)
-
+			
 			switch {
 			case timeSince < 24*time.Hour:
 				fmt.Printf("✅ %s: Last push %s ago\n", username, formatDuration(timeSince))
@@ -263,13 +268,13 @@ var checkLastPush = &cobra.Command{
 				fmt.Printf("⚠️ %s: Last push %s ago\n", username, formatDuration(timeSince))
 			}
 		}
-
+		
 		fmt.Println("\nLegend:")
 		fmt.Println("✅ - Pushed within last 24 hours")
 		fmt.Println("🟡 - Pushed within last 72 hours")
 		fmt.Println("⚠️ - No push in over 72 hours")
 		fmt.Println("❌ - Error checking activity")
-
+		
 		return nil
 	},
 }
@@ -280,7 +285,7 @@ var cloneRepos = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		className := args[0]
-
+		
 		rows, err := db.Query(`
 			SELECT s.username 
 			FROM students s
@@ -297,7 +302,7 @@ var cloneRepos = &cobra.Command{
 			if err := rows.Scan(&username); err != nil {
 				return err
 			}
-
+			
 			cmd := exec.Command("git", "clone", fmt.Sprintf("https://github.com/%s/%s.github.io", username, username), username)
 			if err := cmd.Run(); err != nil {
 				fmt.Printf("Failed to clone repository for %s: %v\n", username, err)
@@ -315,7 +320,7 @@ var pullRepos = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		className := args[0]
-
+		
 		rows, err := db.Query(`
 			SELECT s.username 
 			FROM students s
@@ -332,7 +337,7 @@ var pullRepos = &cobra.Command{
 			if err := rows.Scan(&username); err != nil {
 				return err
 			}
-
+			
 			if _, err := os.Stat(username); err == nil {
 				cmd := exec.Command("git", "-C", username, "pull")
 				if err := cmd.Run(); err != nil {
@@ -366,7 +371,7 @@ var removeStudent = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("failed to remove student %s: %v", username, err)
 			}
-
+			
 			rowsAffected, _ := result.RowsAffected()
 			if rowsAffected > 0 {
 				fmt.Printf("Removed student: %s from class: %s\n", username, className)
@@ -421,13 +426,164 @@ var removeClass = &cobra.Command{
 	},
 }
 
-var cleanRepos = &cobra.Command{
+// Get the date range for the grid (Monday-Friday)
+func getGridDateRange() (time.Time, time.Time) {
+	now := time.Now()
+	
+	// If it's weekend, show last week's Monday-Friday
+	if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
+		// Go back to Friday
+		for now.Weekday() != time.Friday {
+			now = now.AddDate(0, 0, -1)
+		}
+	}
+	
+	// Find Monday
+	start := now
+	for start.Weekday() != time.Monday {
+		start = start.AddDate(0, 0, -1)
+	}
+	
+	// End is either today or Friday, whichever comes first
+	end := now
+	if end.Weekday() > time.Friday {
+		for end.Weekday() != time.Friday {
+			end = end.AddDate(0, 0, -1)
+		}
+	}
+	
+	return start, end
+}
+
+// Get all push events for a user within a date range
+func getUserPushDates(username string, start, end time.Time) (map[string]bool, error) {
+	token := os.Getenv("GITHUB_TOKEN")
+	if token == "" {
+		return nil, fmt.Errorf("GITHUB_TOKEN environment variable not set")
+	}
+
+	url := fmt.Sprintf("https://api.github.com/users/%s/events/public", username)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Authorization", "token "+token)
+	req.Header.Set("Accept", "application/vnd.github.v3+json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned status: %s", resp.Status)
+	}
+
+	var events []GithubEvent
+	if err := json.NewDecoder(resp.Body).Decode(&events); err != nil {
+		return nil, err
+	}
+
+	// Create map of dates with pushes
+	pushDates := make(map[string]bool)
+	for _, event := range events {
+		if event.Type == "PushEvent" {
+			date := event.CreatedAt.Format("2006-01-02")
+			if event.CreatedAt.After(start) && event.CreatedAt.Before(end.AddDate(0, 0, 1)) {
+				pushDates[date] = true
+			}
+		}
+	}
+
+	return pushDates, nil
+}
+
+var weekHistory = &cobra.Command{
+	Use:   "week-history [class]",
+	Short: "Show weekly activity history for the class",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		className := args[0]
+
+		// Get date range
+		start, end := getGridDateRange()
+		
+		// Get all students
+		rows, err := db.Query(`
+			SELECT s.username 
+			FROM students s
+			JOIN classes c ON s.class_id = c.id
+			WHERE c.name = ?
+			ORDER BY s.username`,
+			className)
+		if err != nil {
+			return fmt.Errorf("failed to query students: %v", err)
+		}
+		defer rows.Close()
+
+		// Build header
+		dates := []string{}
+		for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+			dates = append(dates, d.Format("Mon 01/02"))
+		}
+
+		// Print header
+		fmt.Printf("\nActivity Grid for %s:\n", className)
+		fmt.Printf("%-20s", "Username")
+		for _, date := range dates {
+			fmt.Printf("| %-10s", date)
+		}
+		fmt.Println()
+		
+		// Print separator
+		fmt.Printf("%-20s", strings.Repeat("-", 20))
+		for range dates {
+			fmt.Printf("+-%-10s", strings.Repeat("-", 10))
+		}
+		fmt.Println()
+
+		// For each student
+		for rows.Next() {
+			var username string
+			if err := rows.Scan(&username); err != nil {
+				return err
+			}
+
+			pushDates, err := getUserPushDates(username, start, end)
+			if err != nil {
+				fmt.Printf("%-20s| ❌ Error checking activity: %v\n", username, err)
+				continue
+			}
+
+			// Print student row
+			fmt.Printf("%-20s", username)
+			for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+				date := d.Format("2006-01-02")
+				if pushDates[date] {
+					fmt.Printf("| %-10s", "✅")
+				} else {
+					fmt.Printf("| %-10s", "❌")
+				}
+			}
+			fmt.Println()
+		}
+		
+		fmt.Println("\nLegend:")
+		fmt.Println("✅ - Pushed code on this day")
+		fmt.Println("❌ - No push activity")
+		
+		return nil
+	},
+}
 	Use:   "clean [class]",
 	Short: "Clean all repositories in a class",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		className := args[0]
-
+		
 		rows, err := db.Query(`
 			SELECT s.username 
 			FROM students s
@@ -444,7 +600,7 @@ var cleanRepos = &cobra.Command{
 			if err := rows.Scan(&username); err != nil {
 				return err
 			}
-
+			
 			if _, err := os.Stat(username); err == nil {
 				cmd := exec.Command("git", "-C", username, "checkout", ".")
 				if err := cmd.Run(); err != nil {
@@ -475,6 +631,7 @@ func main() {
 	rootCmd.AddCommand(pullRepos)
 	rootCmd.AddCommand(cleanRepos)
 	rootCmd.AddCommand(checkLastPush)
+	rootCmd.AddCommand(weekHistory)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

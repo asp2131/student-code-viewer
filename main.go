@@ -617,26 +617,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					defer rows.Close()
 
 					var sb strings.Builder
-					// Build header
-					dates := []string{}
+					// Build header and date mapping
+					var dates []struct {
+						display string
+						lookup  string
+					}
+
 					for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-						dates = append(dates, d.Format("Mon 01/02"))
+						dates = append(dates, struct {
+							display string
+							lookup  string
+						}{
+							display: d.Format("Mon 01/02"),
+							lookup:  d.Format("2006-01-02"),
+						})
 					}
 
 					sb.WriteString(fmt.Sprintf("Activity Grid for %s:\n", m.className))
-					colWidth := 10
-
-					// Print header row
-					sb.WriteString(fmt.Sprintf("%-20s", "Username")) // 20 chars for username
-					for _, date := range dates {
-						sb.WriteString(fmt.Sprintf("| %-*s", colWidth, date))
+					sb.WriteString(fmt.Sprintf("%-20s", "Username"))
+					for _, d := range dates {
+						sb.WriteString(fmt.Sprintf("| %-9s", d.display))
 					}
 					sb.WriteString("\n")
 
 					// Print separator row
-					sb.WriteString(fmt.Sprintf("%-20s", strings.Repeat("-", 20)))
+					sb.WriteString(strings.Repeat("-", 20))
 					for range dates {
-						sb.WriteString(fmt.Sprintf("+-%-*s", colWidth-1, strings.Repeat("-", colWidth-1)))
+						sb.WriteString("+----------")
 					}
 					sb.WriteString("\n")
 
@@ -654,12 +661,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 
 						sb.WriteString(fmt.Sprintf("%-20s", username))
-						for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-							date := d.Format("2006-01-02")
-							if pushDates[date] {
-								sb.WriteString(fmt.Sprintf("| %-*s", colWidth, successStyle.Render("✔")))
+						for _, d := range dates {
+							if pushDates[d.lookup] {
+								sb.WriteString(fmt.Sprintf("| %-9s", successStyle.Render(iconSuccess)))
 							} else {
-								sb.WriteString(fmt.Sprintf("| %-*s", colWidth, errorStyle.Render("✖")))
+								sb.WriteString(fmt.Sprintf("| %-9s", errorStyle.Render(iconError)))
 							}
 						}
 						sb.WriteString("\n")

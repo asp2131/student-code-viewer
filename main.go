@@ -65,6 +65,12 @@ var (
 			Margin(1, 2)
 )
 
+const (
+	iconSuccess = "✔" // single-width check
+	iconWarning = "!" // single-width exclamation
+	iconError   = "✖" // single-width cross
+)
+
 // Model states
 const (
 	stateMainMenu = iota
@@ -572,29 +578,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						switch {
 						case timeSince < 24*time.Hour:
 							sb.WriteString(fmt.Sprintf("%s %s: Last push %s ago\n",
-								successStyle.Render("✅"),
+								successStyle.Render(iconSuccess),
 								successStyle.Render(username),
 								formatDuration(timeSince),
 							))
 						case timeSince < 72*time.Hour:
 							sb.WriteString(fmt.Sprintf("%s %s: Last push %s ago\n",
-								warningStyle.Render("🟡"),
+								warningStyle.Render(iconWarning),
 								warningStyle.Render(username),
 								formatDuration(timeSince),
 							))
 						default:
 							sb.WriteString(fmt.Sprintf("%s %s: Last push %s ago\n",
-								errorStyle.Render("⚠️"),
+								errorStyle.Render(iconError),
 								errorStyle.Render(username),
 								formatDuration(timeSince),
 							))
 						}
 					}
 					sb.WriteString("\nLegend:\n")
-					sb.WriteString(successStyle.Render("✅ - Pushed within last 24 hours\n"))
-					sb.WriteString(warningStyle.Render("🟡 - Pushed within last 72 hours\n"))
-					sb.WriteString(errorStyle.Render("⚠️ - No push in over 72 hours\n"))
-					sb.WriteString(errorStyle.Render("❌ - Error checking activity\n"))
+					sb.WriteString(successStyle.Render(fmt.Sprintf("%s - Pushed within last 24 hours\n", iconSuccess)))
+					sb.WriteString(warningStyle.Render(fmt.Sprintf("%s - Pushed within last 72 hours\n", iconWarning)))
+					sb.WriteString(errorStyle.Render(fmt.Sprintf("%s - No push in over 72 hours\n", iconError)))
+					sb.WriteString(errorStyle.Render(fmt.Sprintf("%s - Error checking activity\n", iconError)))
 
 					m.output = sb.String()
 					m.state = stateOutput
@@ -651,16 +657,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 							date := d.Format("2006-01-02")
 							if pushDates[date] {
-								sb.WriteString(fmt.Sprintf("| %-10s", successStyle.Render("✅")))
+								sb.WriteString(fmt.Sprintf("| %-10s", successStyle.Render(iconSuccess)))
 							} else {
-								sb.WriteString(fmt.Sprintf("| %-10s", errorStyle.Render("❌")))
+								sb.WriteString(fmt.Sprintf("| %-10s", errorStyle.Render(iconError)))
 							}
 						}
 						sb.WriteString("\n")
 					}
 					sb.WriteString("\nLegend:\n")
-					sb.WriteString(successStyle.Render("✅ - Pushed code on this day\n"))
-					sb.WriteString(errorStyle.Render("❌ - No push activity\n"))
+					sb.WriteString(successStyle.Render(fmt.Sprintf("%s - Pushed code on this day\n", iconSuccess)))
+					sb.WriteString(errorStyle.Render(fmt.Sprintf("%s - No push activity\n", iconError)))
 
 					m.output = sb.String()
 					m.state = stateOutput

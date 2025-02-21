@@ -34,12 +34,23 @@ var (
 			Foreground(lipgloss.Color("#FF75B5")).
 			MarginLeft(2)
 
-	itemStyle = lipgloss.NewStyle().
-			PaddingLeft(4)
+	outputBoxStyle = lipgloss.NewStyle().
+			Margin(1, 2).
+			Padding(1, 2).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#FF75B5"))
 
-	selectedItemStyle = lipgloss.NewStyle().
-				PaddingLeft(2).
-				Foreground(lipgloss.Color("170"))
+	successStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#00FF00"))
+
+	warningStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#FFFF00"))
+
+	errorStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#FF0000"))
 
 	paginationStyle = list.DefaultStyles().
 			PaginationStyle.
@@ -59,7 +70,7 @@ const (
 	stateMainMenu = iota
 	stateClassInput
 	stateStudentInput
-	stateProcessing
+	stateOutput
 )
 
 type item struct {
@@ -78,6 +89,7 @@ type model struct {
 	studentInput textinput.Model
 	className    string
 	err          error
+	output       string // holds command output to be rendered in stateOutput
 }
 
 func initDB() error {
@@ -277,6 +289,7 @@ func initialModel() model {
 		state:        stateMainMenu,
 		classInput:   classInput,
 		studentInput: studentInput,
+		output:       "",
 	}
 }
 
@@ -285,6 +298,16 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// If we're in the output view, any Enter or Esc returns to the main menu.
+	if m.state == stateOutput {
+		if keyMsg, ok := msg.(tea.KeyMsg); ok {
+			if keyMsg.String() == "enter" || keyMsg.String() == "esc" {
+				m.state = stateMainMenu
+			}
+		}
+		return m, nil
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -307,7 +330,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.className = ""
 						return m, nil
 					case "List Classes":
-						// Execute list classes directly
 						rows, err := db.Query("SELECT name FROM classes")
 						if err != nil {
 							m.err = err
@@ -315,13 +337,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 						defer rows.Close()
 
-						fmt.Println("\nClasses:")
+						var sb strings.Builder
+						sb.WriteString("Classes:\n")
 						for rows.Next() {
 							var name string
 							rows.Scan(&name)
-							fmt.Printf("- %s\n", name)
+							sb.WriteString(fmt.Sprintf("- %s\n", name))
 						}
-						return m, tea.Quit
+						m.output = sb.String()
+						m.state = stateOutput
+						return m, nil
 					}
 				}
 			} else if m.state == stateClassInput {
@@ -333,7 +358,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
-				// Execute the command
 				switch i.title {
 				case "Add Class":
 					_, err := db.Exec("INSERT INTO classes (name) VALUES (?)", m.className)
@@ -341,10 +365,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.err = err
 						return m, nil
 					}
-					fmt.Printf("Added class: %s\n", m.className)
+					m.output = fmt.Sprintf("Added class: %s\n", m.className)
+					m.state = stateOutput
+					return m, nil
 
 				case "Remove Class":
-					// Start a transaction
 					tx, err := db.Begin()
 					if err != nil {
 						m.err = err
@@ -352,7 +377,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					defer tx.Rollback()
 
-					// Get class ID
 					var classID int
 					err = tx.QueryRow("SELECT id FROM classes WHERE name = ?", m.className).Scan(&classID)
 					if err != nil {
@@ -360,14 +384,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, nil
 					}
 
-					// Remove students first
 					_, err = tx.Exec("DELETE FROM students WHERE class_id = ?", classID)
 					if err != nil {
 						m.err = fmt.Errorf("failed to remove students: %v", err)
 						return m, nil
 					}
 
-					// Remove class
 					_, err = tx.Exec("DELETE FROM classes WHERE id = ?", classID)
 					if err != nil {
 						m.err = fmt.Errorf("failed to remove class: %v", err)
@@ -379,7 +401,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, nil
 					}
 
-					fmt.Printf("Removed class: %s and all its students\n", m.className)
+					m.output = fmt.Sprintf("Removed class: %s and all its students\n", m.className)
+					m.state = stateOutput
+					return m, nil
 
 				case "List Students":
 					rows, err := db.Query(`
@@ -395,15 +419,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					defer rows.Close()
 
-					fmt.Printf("Students in %s:\n", m.className)
+					var sb strings.Builder
+					sb.WriteString(fmt.Sprintf("Students in %s:\n", m.className))
 					for rows.Next() {
 						var username string
 						if err := rows.Scan(&username); err != nil {
 							m.err = err
 							return m, nil
 						}
-						fmt.Printf("- %s\n", username)
+						sb.WriteString(fmt.Sprintf("- %s\n", username))
 					}
+					m.output = sb.String()
+					m.state = stateOutput
+					return m, nil
 
 				case "Clone Repositories":
 					rows, err := db.Query(`
@@ -418,6 +446,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					defer rows.Close()
 
+					var sb strings.Builder
 					for rows.Next() {
 						var username string
 						if err := rows.Scan(&username); err != nil {
@@ -427,11 +456,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 						cmd := exec.Command("git", "clone", fmt.Sprintf("https://github.com/%s/%s.github.io", username, username), username)
 						if err := cmd.Run(); err != nil {
-							fmt.Printf("Failed to clone repository for %s: %v\n", username, err)
+							sb.WriteString(fmt.Sprintf("Failed to clone repository for %s: %v\n", username, err))
 							continue
 						}
-						fmt.Printf("Cloned repository for: %s\n", username)
+						sb.WriteString(fmt.Sprintf("Cloned repository for: %s\n", username))
 					}
+					m.output = sb.String()
+					m.state = stateOutput
+					return m, nil
 
 				case "Pull Changes":
 					rows, err := db.Query(`
@@ -446,6 +478,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					defer rows.Close()
 
+					var sb strings.Builder
 					for rows.Next() {
 						var username string
 						if err := rows.Scan(&username); err != nil {
@@ -456,12 +489,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						if _, err := os.Stat(username); err == nil {
 							cmd := exec.Command("git", "-C", username, "pull")
 							if err := cmd.Run(); err != nil {
-								fmt.Printf("Failed to pull repository for %s: %v\n", username, err)
+								sb.WriteString(fmt.Sprintf("Failed to pull repository for %s: %v\n", username, err))
 								continue
 							}
-							fmt.Printf("Pulled latest changes for: %s\n", username)
+							sb.WriteString(fmt.Sprintf("Pulled latest changes for: %s\n", username))
 						}
 					}
+					m.output = sb.String()
+					m.state = stateOutput
+					return m, nil
 
 				case "Clean Changes":
 					rows, err := db.Query(`
@@ -476,6 +512,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					defer rows.Close()
 
+					var sb strings.Builder
 					for rows.Next() {
 						var username string
 						if err := rows.Scan(&username); err != nil {
@@ -486,12 +523,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						if _, err := os.Stat(username); err == nil {
 							cmd := exec.Command("git", "-C", username, "checkout", ".")
 							if err := cmd.Run(); err != nil {
-								fmt.Printf("Failed to clean repository for %s: %v\n", username, err)
+								sb.WriteString(fmt.Sprintf("Failed to clean repository for %s: %v\n", username, err))
 								continue
 							}
-							fmt.Printf("Cleaned repository for: %s\n", username)
+							sb.WriteString(fmt.Sprintf("Cleaned repository for: %s\n", username))
 						}
 					}
+					m.output = sb.String()
+					m.state = stateOutput
+					return m, nil
 
 				case "Check Activity":
 					rows, err := db.Query(`
@@ -507,8 +547,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					defer rows.Close()
 
-					fmt.Printf("\nActivity Report for %s:\n", m.className)
-					fmt.Println("----------------------------------------")
+					var sb strings.Builder
+					sb.WriteString(fmt.Sprintf("Activity Report for %s:\n", m.className))
+					sb.WriteString("----------------------------------------\n")
 
 					for rows.Next() {
 						var username string
@@ -519,32 +560,48 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 						lastPush, err := getLastPushTime(username)
 						if err != nil {
-							fmt.Printf("❌ %s: Error checking activity - %v\n", username, err)
+							sb.WriteString(fmt.Sprintf("%s %s: Error checking activity - %v\n",
+								errorStyle.Render("❌"),
+								errorStyle.Render(username),
+								err,
+							))
 							continue
 						}
 
 						timeSince := time.Since(lastPush)
-
 						switch {
 						case timeSince < 24*time.Hour:
-							fmt.Printf("✅ %s: Last push %s ago\n", username, formatDuration(timeSince))
+							sb.WriteString(fmt.Sprintf("%s %s: Last push %s ago\n",
+								successStyle.Render("✅"),
+								successStyle.Render(username),
+								formatDuration(timeSince),
+							))
 						case timeSince < 72*time.Hour:
-							fmt.Printf("🟡 %s: Last push %s ago\n", username, formatDuration(timeSince))
+							sb.WriteString(fmt.Sprintf("%s %s: Last push %s ago\n",
+								warningStyle.Render("🟡"),
+								warningStyle.Render(username),
+								formatDuration(timeSince),
+							))
 						default:
-							fmt.Printf("⚠️ %s: Last push %s ago\n", username, formatDuration(timeSince))
+							sb.WriteString(fmt.Sprintf("%s %s: Last push %s ago\n",
+								errorStyle.Render("⚠️"),
+								errorStyle.Render(username),
+								formatDuration(timeSince),
+							))
 						}
 					}
+					sb.WriteString("\nLegend:\n")
+					sb.WriteString(successStyle.Render("✅ - Pushed within last 24 hours\n"))
+					sb.WriteString(warningStyle.Render("🟡 - Pushed within last 72 hours\n"))
+					sb.WriteString(errorStyle.Render("⚠️ - No push in over 72 hours\n"))
+					sb.WriteString(errorStyle.Render("❌ - Error checking activity\n"))
 
-					fmt.Println("\nLegend:")
-					fmt.Println("✅ - Pushed within last 24 hours")
-					fmt.Println("🟡 - Pushed within last 72 hours")
-					fmt.Println("⚠️ - No push in over 72 hours")
-					fmt.Println("❌ - Error checking activity")
+					m.output = sb.String()
+					m.state = stateOutput
+					return m, nil
 
 				case "Week History":
-					// Get date range
 					start, end := getGridDateRange()
-
 					rows, err := db.Query(`
 						SELECT s.username 
 						FROM students s
@@ -558,28 +615,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					defer rows.Close()
 
+					var sb strings.Builder
 					// Build header
 					dates := []string{}
 					for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 						dates = append(dates, d.Format("Mon 01/02"))
 					}
 
-					// Print header
-					fmt.Printf("\nActivity Grid for %s:\n", m.className)
-					fmt.Printf("%-20s", "Username")
+					sb.WriteString(fmt.Sprintf("Activity Grid for %s:\n", m.className))
+					sb.WriteString(fmt.Sprintf("%-20s", "Username"))
 					for _, date := range dates {
-						fmt.Printf("| %-10s", date)
+						sb.WriteString(fmt.Sprintf("| %-10s", date))
 					}
-					fmt.Println()
-
-					// Print separator
-					fmt.Printf("%-20s", strings.Repeat("-", 20))
+					sb.WriteString("\n")
+					sb.WriteString(fmt.Sprintf("%-20s", strings.Repeat("-", 20)))
 					for range dates {
-						fmt.Printf("+-%-10s", strings.Repeat("-", 10))
+						sb.WriteString(fmt.Sprintf("+-%-10s", strings.Repeat("-", 10)))
 					}
-					fmt.Println()
+					sb.WriteString("\n")
 
-					// For each student
 					for rows.Next() {
 						var username string
 						if err := rows.Scan(&username); err != nil {
@@ -589,33 +643,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 						pushDates, err := getUserPushDates(username, start, end)
 						if err != nil {
-							fmt.Printf("%-20s| ❌ Error checking activity: %v\n", username, err)
+							sb.WriteString(fmt.Sprintf("%-20s| %s\n", username, errorStyle.Render(fmt.Sprintf("Error: %v", err))))
 							continue
 						}
 
-						// Print student row
-						fmt.Printf("%-20s", username)
+						sb.WriteString(fmt.Sprintf("%-20s", username))
 						for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 							date := d.Format("2006-01-02")
 							if pushDates[date] {
-								fmt.Printf("| %-10s", "✅")
+								sb.WriteString(fmt.Sprintf("| %-10s", successStyle.Render("✅")))
 							} else {
-								fmt.Printf("| %-10s", "❌")
+								sb.WriteString(fmt.Sprintf("| %-10s", errorStyle.Render("❌")))
 							}
 						}
-						fmt.Println()
+						sb.WriteString("\n")
 					}
+					sb.WriteString("\nLegend:\n")
+					sb.WriteString(successStyle.Render("✅ - Pushed code on this day\n"))
+					sb.WriteString(errorStyle.Render("❌ - No push activity\n"))
 
-					fmt.Println("\nLegend:")
-					fmt.Println("✅ - Pushed code on this day")
-					fmt.Println("❌ - No push activity")
+					m.output = sb.String()
+					m.state = stateOutput
+					return m, nil
 				}
-
 				return m, tea.Quit
 			} else if m.state == stateStudentInput {
 				usernames := strings.Fields(m.studentInput.Value())
 
-				// Get class ID
 				var classID int
 				err := db.QueryRow("SELECT id FROM classes WHERE name = ?", m.className).Scan(&classID)
 				if err != nil {
@@ -623,7 +677,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
-				// Add students
+				var sb strings.Builder
 				for _, username := range usernames {
 					_, err := db.Exec("INSERT OR IGNORE INTO students (username, class_id) VALUES (?, ?)",
 						username, classID)
@@ -631,10 +685,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.err = err
 						return m, nil
 					}
-					fmt.Printf("Added student: %s to class: %s\n", username, m.className)
+					sb.WriteString(fmt.Sprintf("Added student: %s to class: %s\n", username, m.className))
 				}
-
-				return m, tea.Quit
+				m.output = sb.String()
+				m.state = stateOutput
+				return m, nil
 			}
 		}
 	}
@@ -666,6 +721,10 @@ func (m model) View() string {
 			titleStyle.Render("Enter Student Usernames") + "\n" +
 				"(Space-separated list of GitHub usernames)\n\n" +
 				m.studentInput.View(),
+		)
+	case stateOutput:
+		return docStyle.Render(
+			outputBoxStyle.Render(m.output + "\n\nPress Enter/Esc to go back."),
 		)
 	default:
 		return "Loading..."

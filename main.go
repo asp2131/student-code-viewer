@@ -1,5 +1,108 @@
 package main
 
+import (
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
+
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	_ "github.com/mattn/go-sqlite3"
+)
+
+type GithubEvent struct {
+	Type      string    `json:"type"`
+	CreatedAt time.Time `json:"created_at"`
+	Repo      struct {
+		Name string `json:"name"`
+	} `json:"repo"`
+}
+
+var db *sql.DB
+
+// Styles
+var (
+	titleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#FF75B5")).
+			MarginLeft(2)
+
+	itemStyle = lipgloss.NewStyle().
+			PaddingLeft(4)
+
+	selectedItemStyle = lipgloss.NewStyle().
+				PaddingLeft(2).
+				Foreground(lipgloss.Color("170"))
+
+	paginationStyle = list.DefaultStyles().
+			PaginationStyle.
+			PaddingLeft(4)
+
+	helpStyle = list.DefaultStyles().
+			HelpStyle.
+			PaddingLeft(4).
+			PaddingBottom(1)
+
+	docStyle = lipgloss.NewStyle().
+			Margin(1, 2)
+)
+
+// Model states
+const (
+	stateMainMenu = iota
+	stateClassInput
+	stateStudentInput
+	stateProcessing
+)
+
+type item struct {
+	title       string
+	description string
+}
+
+func (i item) Title() string       { return i.title }
+func (i item) Description() string { return i.description }
+func (i item) FilterValue() string { return i.title }
+
+type model struct {
+	list         list.Model
+	state        int
+	classInput   textinput.Model
+	studentInput textinput.Model
+	className    string
+	err          error
+}
+
+func initDB() error {
+	var err error
+	db, err = sql.Open("sqlite3", "./students.db")
+	if err != nil {
+		return err
+	}
+
+	createTable := `
+	CREATE TABLE IF NOT EXISTS classes (
+		id INTEGER PRIMARY KEY,
+		name TEXT UNIQUE
+	);
+	CREATE TABLE IF NOT EXISTS students (
+		username TEXT,
+		class_id INTEGER,
+		FOREIGN KEY(class_id) REFERENCES classes(id),
+		UNIQUE(username, class_id)
+	);`
+
+	_, err = db.Exec(createTable)
+	return err
+}
+
 func getLastPushTime(username string) (time.Time, error) {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
@@ -63,7 +166,7 @@ func formatDuration(d time.Duration) string {
 
 func getGridDateRange() (time.Time, time.Time) {
 	now := time.Now()
-	
+
 	// If it's weekend, show last week's Monday-Friday
 	if now.Weekday() == time.Saturday || now.Weekday() == time.Sunday {
 		// Go back to Friday
@@ -71,13 +174,13 @@ func getGridDateRange() (time.Time, time.Time) {
 			now = now.AddDate(0, 0, -1)
 		}
 	}
-	
+
 	// Find Monday
 	start := now
 	for start.Weekday() != time.Monday {
 		start = start.AddDate(0, 0, -1)
 	}
-	
+
 	// End is either today or Friday, whichever comes first
 	end := now
 	if end.Weekday() > time.Friday {
@@ -85,7 +188,7 @@ func getGridDateRange() (time.Time, time.Time) {
 			end = end.AddDate(0, 0, -1)
 		}
 	}
-	
+
 	return start, end
 }
 
@@ -125,78 +228,13 @@ func getUserPushDates(username string, start, end time.Time) (map[string]bool, e
 	for _, event := range events {
 		if event.Type == "PushEvent" {
 			date := event.CreatedAt.Format("2006-01-02")
-			if event.CreatedAt.After(start) && event.Createpackage main
+			if event.CreatedAt.After(start) && event.CreatedAt.Before(end.AddDate(0, 0, 1)) {
+				pushDates[date] = true
+			}
+		}
+	}
 
-import (
-	"database/sql"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"os"
-	"os/exec"
-	"strings"
-	"time"
-
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
-	_ "github.com/mattn/go-sqlite3"
-)
-
-var db *sql.DB
-
-// Styles
-var (
-	titleStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#FF75B5")).
-		MarginLeft(2)
-
-	itemStyle = lipgloss.NewStyle().
-		PaddingLeft(4)
-
-	selectedItemStyle = lipgloss.NewStyle().
-		PaddingLeft(2).
-		Foreground(lipgloss.Color("170"))
-
-	paginationStyle = list.DefaultStyles().
-		PaginationStyle.
-		PaddingLeft(4)
-
-	helpStyle = list.DefaultStyles().
-		HelpStyle.
-		PaddingLeft(4).
-		PaddingBottom(1)
-
-	docStyle = lipgloss.NewStyle().
-		Margin(1, 2)
-)
-
-// Model states
-const (
-	stateMainMenu = iota
-	stateClassInput
-	stateStudentInput
-	stateProcessing
-)
-
-type item struct {
-	title       string
-	description string
-}
-
-func (i item) Title() string       { return i.title }
-func (i item) Description() string { return i.description }
-func (i item) FilterValue() string { return i.title }
-
-type model struct {
-	list         list.Model
-	state        int
-	classInput   textinput.Model
-	studentInput textinput.Model
-	className    string
-	err          error
+	return pushDates, nil
 }
 
 func initialModel() model {
@@ -289,12 +327,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.state == stateClassInput {
 				m.className = m.classInput.Value()
 				i, _ := m.list.SelectedItem().(item)
-				
+
 				if i.title == "Add Students" {
 					m.state = stateStudentInput
 					return m, nil
 				}
-				
+
 				// Execute the command
 				switch i.title {
 				case "Add Class":
@@ -304,7 +342,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, nil
 					}
 					fmt.Printf("Added class: %s\n", m.className)
-					
+
 				case "Remove Class":
 					// Start a transaction
 					tx, err := db.Begin()
@@ -342,7 +380,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 
 					fmt.Printf("Removed class: %s and all its students\n", m.className)
-					
+
 				case "List Students":
 					rows, err := db.Query(`
 						SELECT s.username 
@@ -366,7 +404,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 						fmt.Printf("- %s\n", username)
 					}
-					
+
 				case "Clone Repositories":
 					rows, err := db.Query(`
 						SELECT s.username 
@@ -386,7 +424,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.err = err
 							return m, nil
 						}
-						
+
 						cmd := exec.Command("git", "clone", fmt.Sprintf("https://github.com/%s/%s.github.io", username, username), username)
 						if err := cmd.Run(); err != nil {
 							fmt.Printf("Failed to clone repository for %s: %v\n", username, err)
@@ -394,7 +432,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 						fmt.Printf("Cloned repository for: %s\n", username)
 					}
-					
+
 				case "Pull Changes":
 					rows, err := db.Query(`
 						SELECT s.username 
@@ -414,7 +452,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.err = err
 							return m, nil
 						}
-						
+
 						if _, err := os.Stat(username); err == nil {
 							cmd := exec.Command("git", "-C", username, "pull")
 							if err := cmd.Run(); err != nil {
@@ -424,7 +462,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							fmt.Printf("Pulled latest changes for: %s\n", username)
 						}
 					}
-					
+
 				case "Clean Changes":
 					rows, err := db.Query(`
 						SELECT s.username 
@@ -444,7 +482,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.err = err
 							return m, nil
 						}
-						
+
 						if _, err := os.Stat(username); err == nil {
 							cmd := exec.Command("git", "-C", username, "checkout", ".")
 							if err := cmd.Run(); err != nil {
@@ -454,7 +492,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							fmt.Printf("Cleaned repository for: %s\n", username)
 						}
 					}
-					
+
 				case "Check Activity":
 					rows, err := db.Query(`
 						SELECT s.username 
@@ -486,7 +524,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 
 						timeSince := time.Since(lastPush)
-						
+
 						switch {
 						case timeSince < 24*time.Hour:
 							fmt.Printf("✅ %s: Last push %s ago\n", username, formatDuration(timeSince))
@@ -496,17 +534,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							fmt.Printf("⚠️ %s: Last push %s ago\n", username, formatDuration(timeSince))
 						}
 					}
-					
+
 					fmt.Println("\nLegend:")
 					fmt.Println("✅ - Pushed within last 24 hours")
 					fmt.Println("🟡 - Pushed within last 72 hours")
 					fmt.Println("⚠️ - No push in over 72 hours")
 					fmt.Println("❌ - Error checking activity")
-					
+
 				case "Week History":
 					// Get date range
 					start, end := getGridDateRange()
-					
+
 					rows, err := db.Query(`
 						SELECT s.username 
 						FROM students s
@@ -533,7 +571,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						fmt.Printf("| %-10s", date)
 					}
 					fmt.Println()
-					
+
 					// Print separator
 					fmt.Printf("%-20s", strings.Repeat("-", 20))
 					for range dates {
@@ -567,16 +605,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 						fmt.Println()
 					}
-					
+
 					fmt.Println("\nLegend:")
 					fmt.Println("✅ - Pushed code on this day")
 					fmt.Println("❌ - No push activity")
 				}
-				
+
 				return m, tea.Quit
 			} else if m.state == stateStudentInput {
 				usernames := strings.Fields(m.studentInput.Value())
-				
+
 				// Get class ID
 				var classID int
 				err := db.QueryRow("SELECT id FROM classes WHERE name = ?", m.className).Scan(&classID)
@@ -595,7 +633,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					fmt.Printf("Added student: %s to class: %s\n", username, m.className)
 				}
-				
+
 				return m, tea.Quit
 			}
 		}
@@ -610,7 +648,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case stateStudentInput:
 		m.studentInput, cmd = m.studentInput.Update(msg)
 	}
-	
+
 	return m, cmd
 }
 
@@ -621,13 +659,13 @@ func (m model) View() string {
 	case stateClassInput:
 		return docStyle.Render(
 			titleStyle.Render("Enter Class Name") + "\n\n" +
-			m.classInput.View(),
+				m.classInput.View(),
 		)
 	case stateStudentInput:
 		return docStyle.Render(
 			titleStyle.Render("Enter Student Usernames") + "\n" +
-			"(Space-separated list of GitHub usernames)\n\n" +
-			m.studentInput.View(),
+				"(Space-separated list of GitHub usernames)\n\n" +
+				m.studentInput.View(),
 		)
 	default:
 		return "Loading..."

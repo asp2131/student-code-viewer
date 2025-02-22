@@ -634,15 +634,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					columns := []table.Column{
 						{Title: "Username", Width: 20},
 					}
-					
+
 					// Add a column for each date
 					for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 						columns = append(columns, table.Column{
 							Title: d.Format("Mon 01/02"),
-							Width: 10,
+							Width: 12, // Increased width to accommodate the date
 						})
 					}
-				
+
 					// Create table rows
 					var tableRows []table.Row
 					for rows.Next() {
@@ -651,36 +651,36 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.err = err
 							return m, nil
 						}
-				
+
 						pushDates, err := getUserPushDates(username, start, end)
 						if err != nil {
 							continue
 						}
-				
+
 						// Create row starting with username
 						row := []string{username}
-				
+
 						// Add activity status for each date
 						for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 							date := d.Format("2006-01-02")
 							if pushDates[date] {
-								row = append(row, successStyle.Render(iconSuccess))
+								row = append(row, "✓") // Using plain checkmark
 							} else {
-								row = append(row, errorStyle.Render(iconError))
+								row = append(row, "✖") // Using plain X
 							}
 						}
-				
+
 						tableRows = append(tableRows, row)
 					}
-				
+
 					// Create and style the table
 					t := table.New(
 						table.WithColumns(columns),
 						table.WithRows(tableRows),
 						table.WithFocused(true),
-						table.WithHeight(10),
+						table.WithHeight(len(tableRows)+1), // Adjust height to show all rows plus header
 					)
-				
+
 					s := table.DefaultStyles()
 					s.Header = s.Header.
 						BorderStyle(lipgloss.NormalBorder()).
@@ -692,16 +692,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						Background(lipgloss.Color("57")).
 						Bold(false)
 					t.SetStyles(s)
-				
+
 					// Create output with table and legend
 					var sb strings.Builder
 					sb.WriteString(fmt.Sprintf("Activity Grid for %s:\n\n", m.className))
 					sb.WriteString(baseStyle.Render(t.View()))
 					sb.WriteString("\n\nLegend:\n")
-					sb.WriteString(successStyle.Render(fmt.Sprintf("%s - Pushed code on this day\n", iconSuccess)))
-					sb.WriteString(errorStyle.Render(fmt.Sprintf("%s - No push activity\n", iconError)))
-					sb.WriteString("\nPress Enter/Esc to go back.")
-				
+					sb.WriteString(successStyle.Render("✓") + " - Pushed code on this day\n")
+					sb.WriteString(errorStyle.Render("✖") + " - No push activity\n")
+
 					m.output = sb.String()
 					m.state = stateOutput
 					return m, nil

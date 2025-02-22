@@ -362,7 +362,6 @@ func showWeekHistoryTview(className string) error {
 
 		col = 1
 		pushDates, err := getUserPushDates(username, start, end)
-		// If there's an error retrieving push data, assume no activity.
 		for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 			dateKey := d.Format("2006-01-02")
 			if err == nil && pushDates[dateKey] {
@@ -381,7 +380,7 @@ func showWeekHistoryTview(className string) error {
 
 	// Create a legend.
 	legend := tview.NewTextView().
-		SetText("Legend: ✓ - Pushed code on this day, ✖ - No push activity").
+		SetText("Press ESC or Enter to exit").
 		SetTextColor(tcell.ColorYellow).
 		SetTextAlign(tview.AlignCenter)
 
@@ -390,16 +389,18 @@ func showWeekHistoryTview(className string) error {
 		AddItem(table, 0, 1, true).
 		AddItem(legend, 1, 1, false)
 
+	// Create the tview application before setting the input capture.
+	app := tview.NewApplication()
+
 	// Allow the user to exit the tview screen with Enter or Escape.
 	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyEscape || event.Key() == tcell.KeyEnter {
-
+			app.Stop()
 			return nil
 		}
 		return event
 	})
 
-	app := tview.NewApplication()
 	return app.SetRoot(flex, true).Run()
 }
 

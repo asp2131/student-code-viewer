@@ -380,7 +380,7 @@ func showWeekHistoryTview(className string) error {
 
 	// Create a legend.
 	legend := tview.NewTextView().
-		SetText("Press ESC or Enter to exit").
+		SetText("Press ESC to exit").
 		SetTextColor(tcell.ColorYellow).
 		SetTextAlign(tview.AlignCenter)
 
@@ -394,7 +394,7 @@ func showWeekHistoryTview(className string) error {
 
 	// Allow the user to exit the tview screen with Enter or Escape.
 	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEscape || event.Key() == tcell.KeyEnter {
+		if event.Key() == tcell.KeyEscape {
 			app.Stop()
 			return nil
 		}

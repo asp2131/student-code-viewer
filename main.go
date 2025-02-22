@@ -658,13 +658,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							continue
 						}
 
-						sb.WriteString(fmt.Sprintf("%-20s", username))
+						// Pad username to 20 chars and truncate if longer
+						displayName := username
+						if len(displayName) > 19 {
+							displayName = displayName[:16] + "..."
+						}
+						sb.WriteString(fmt.Sprintf("%-19s", displayName))
+
 						for _, d := range dates {
 							date := d.Format("2006-01-02")
 							if pushDates[date] {
-								sb.WriteString(fmt.Sprintf("| %-9s", successStyle.Render(iconSuccess)))
+								sb.WriteString("|" + centerText(successStyle.Render(iconSuccess), 10))
 							} else {
-								sb.WriteString(fmt.Sprintf("| %-9s", errorStyle.Render(iconError)))
+								sb.WriteString("|" + centerText(errorStyle.Render(iconError), 10))
 							}
 						}
 						sb.WriteString("\n")

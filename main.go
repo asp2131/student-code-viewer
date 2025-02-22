@@ -210,6 +210,16 @@ func getGridDateRange() (time.Time, time.Time) {
 	return start, end
 }
 
+func centerText(s string, width int) string {
+	if len(s) >= width {
+		return s
+	}
+	padding := width - len(s)
+	leftPad := padding / 2
+	rightPad := padding - leftPad
+	return strings.Repeat(" ", leftPad) + s + strings.Repeat(" ", rightPad)
+}
+
 func getUserPushDates(username string, start, end time.Time) (map[string]bool, error) {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {

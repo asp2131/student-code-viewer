@@ -404,7 +404,7 @@ func showWeekHistoryTview(className string) error {
 	// Run the tview application.
 	err = app.SetRoot(flex, true).Run()
 	// Add a short delay to help the terminal restore its state before returning.
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
 	return err
 }
 

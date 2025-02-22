@@ -633,7 +633,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Write the header row
 					sb.WriteString("Username           ") // 20 chars for username
 					for _, d := range dates {
-						date := d.Format("Mon 01/02")
+						date := d.Format("Mon\n01/02")
 						sb.WriteString(fmt.Sprintf("| %s ", headerStyle.Render(date)))
 					}
 					sb.WriteString("\n")
@@ -662,9 +662,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						for _, d := range dates {
 							date := d.Format("2006-01-02")
 							if pushDates[date] {
-								sb.WriteString(fmt.Sprintf("| %-9s", successStyle.Render(iconSuccess)))
+								sb.WriteString(fmt.Sprintf("| %-20s", successStyle.Render(iconSuccess)))
 							} else {
-								sb.WriteString(fmt.Sprintf("| %-9s", errorStyle.Render(iconError)))
+								sb.WriteString(fmt.Sprintf("| %-20s", errorStyle.Render(iconError)))
 							}
 						}
 						sb.WriteString("\n")

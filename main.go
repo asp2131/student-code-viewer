@@ -380,7 +380,7 @@ func showWeekHistoryTview(className string) error {
 
 	// Create a legend.
 	legend := tview.NewTextView().
-		SetText("Press ESC to exit").
+		SetText("Press ESC or Enter to return to main menu").
 		SetTextColor(tcell.ColorYellow).
 		SetTextAlign(tview.AlignCenter)
 
@@ -389,19 +389,23 @@ func showWeekHistoryTview(className string) error {
 		AddItem(table, 0, 1, true).
 		AddItem(legend, 1, 1, false)
 
-	// Create the tview application before setting the input capture.
+	// Create the tview application.
 	app := tview.NewApplication()
 
 	// Allow the user to exit the tview screen with Enter or Escape.
 	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Key() == tcell.KeyEscape {
+		if event.Key() == tcell.KeyEscape || event.Key() == tcell.KeyEnter {
 			app.Stop()
 			return nil
 		}
 		return event
 	})
 
-	return app.SetRoot(flex, true).Run()
+	// Run the tview application.
+	err = app.SetRoot(flex, true).Run()
+	// Add a short delay to help the terminal restore its state before returning.
+	time.Sleep(100 * time.Millisecond)
+	return err
 }
 
 func (m model) Init() tea.Cmd {

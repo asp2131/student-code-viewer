@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -63,6 +64,9 @@ var (
 
 	docStyle = lipgloss.NewStyle().
 			Margin(1, 2)
+	baseStyle = lipgloss.NewStyle().
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("240"))
 )
 
 const (
@@ -626,70 +630,78 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					defer rows.Close()
 
-					var sb strings.Builder
-					sb.WriteString(fmt.Sprintf("Activity Grid for %s:\n", m.className))
-
-					// Build dates slice
-					var dates []time.Time
+					// Create table columns
+					columns := []table.Column{
+						{Title: "Username", Width: 20},
+					}
+					
+					// Add a column for each date
 					for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-						dates = append(dates, d)
+						columns = append(columns, table.Column{
+							Title: d.Format("Mon 01/02"),
+							Width: 10,
+						})
 					}
-
-					// Create header style
-					headerStyle := lipgloss.NewStyle().
-						Bold(true).
-						PaddingRight(2)
-
-					// Write the header row
-					sb.WriteString("Username           ") // 20 chars for username
-					for _, d := range dates {
-						date := d.Format("Mon 01/02")
-						sb.WriteString(fmt.Sprintf("| %s ", headerStyle.Render(date)))
-					}
-					sb.WriteString("\n")
-
-					// Write the separator line
-					sb.WriteString(strings.Repeat("-", 20))
-					for range dates {
-						sb.WriteString("+----------")
-					}
-					sb.WriteString("\n")
-
-					// Write each student's row
+				
+					// Create table rows
+					var tableRows []table.Row
 					for rows.Next() {
 						var username string
 						if err := rows.Scan(&username); err != nil {
 							m.err = err
 							return m, nil
 						}
-
+				
 						pushDates, err := getUserPushDates(username, start, end)
 						if err != nil {
 							continue
 						}
-
-						// Pad username to 20 chars and truncate if longer
-						displayName := username
-						if len(displayName) > 19 {
-							displayName = displayName[:16] + "..."
-						}
-						sb.WriteString(fmt.Sprintf("%-19s", displayName))
-
-						for _, d := range dates {
+				
+						// Create row starting with username
+						row := []string{username}
+				
+						// Add activity status for each date
+						for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 							date := d.Format("2006-01-02")
 							if pushDates[date] {
-								sb.WriteString("|" + centerText(successStyle.Render(iconSuccess), 10))
+								row = append(row, successStyle.Render(iconSuccess))
 							} else {
-								sb.WriteString("|" + centerText(errorStyle.Render(iconError), 10))
+								row = append(row, errorStyle.Render(iconError))
 							}
 						}
-						sb.WriteString("\n")
+				
+						tableRows = append(tableRows, row)
 					}
-
-					sb.WriteString("\nLegend:\n")
+				
+					// Create and style the table
+					t := table.New(
+						table.WithColumns(columns),
+						table.WithRows(tableRows),
+						table.WithFocused(true),
+						table.WithHeight(10),
+					)
+				
+					s := table.DefaultStyles()
+					s.Header = s.Header.
+						BorderStyle(lipgloss.NormalBorder()).
+						BorderForeground(lipgloss.Color("240")).
+						BorderBottom(true).
+						Bold(false)
+					s.Selected = s.Selected.
+						Foreground(lipgloss.Color("229")).
+						Background(lipgloss.Color("57")).
+						Bold(false)
+					t.SetStyles(s)
+				
+					// Create output with table and legend
+					var sb strings.Builder
+					sb.WriteString(fmt.Sprintf("Activity Grid for %s:\n\n", m.className))
+					sb.WriteString(baseStyle.Render(t.View()))
+					sb.WriteString("\n\nLegend:\n")
 					sb.WriteString(successStyle.Render(fmt.Sprintf("%s - Pushed code on this day\n", iconSuccess)))
 					sb.WriteString(errorStyle.Render(fmt.Sprintf("%s - No push activity\n", iconError)))
-
+					sb.WriteString("\nPress Enter/Esc to go back.")
+				
 					m.output = sb.String()
 					m.state = stateOutput
 					return m, nil

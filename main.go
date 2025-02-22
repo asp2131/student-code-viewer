@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -617,22 +616,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					defer rows.Close()
 
-					// Build dates slice
-					var dates []string
+					var sb strings.Builder
+					sb.WriteString(fmt.Sprintf("Activity Grid for %s:\n", m.className))
+
+					// Create header style
+					headerStyle := lipgloss.NewStyle().
+						Bold(true).
+						PaddingRight(2)
+
+					// Write the header row
+					sb.WriteString("Username           ") // 20 chars for username
 					for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-						dates = append(dates, d.Format("Mon 01/02"))
+						date := d.Format("Mon 01/02")
+						sb.WriteString(fmt.Sprintf("| %s ", headerStyle.Render(date)))
 					}
+					sb.WriteString("\n")
 
-					// Create table columns with proper width
-					columns := []table.Column{
-						{Title: "Username", Width: 20},
+					// Write the separator line
+					sb.WriteString(strings.Repeat("-", 20))
+					for range dates {
+						sb.WriteString("+----------")
 					}
-					for _, date := range dates {
-						columns = append(columns, table.Column{Title: date, Width: 10})
-					}
+					sb.WriteString("\n")
 
-					// Create table rows
-					var tableRows []table.Row
+					// Write each student's row
 					for rows.Next() {
 						var username string
 						if err := rows.Scan(&username); err != nil {
@@ -642,51 +649,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 						pushDates, err := getUserPushDates(username, start, end)
 						if err != nil {
-							tableRows = append(tableRows, table.Row{username, errorStyle.Render("Error getting push data")})
 							continue
 						}
 
-						row := make([]string, 0, len(dates)+1)
-						row = append(row, username)
-
+						sb.WriteString(fmt.Sprintf("%-20s", username))
 						for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 							date := d.Format("2006-01-02")
 							if pushDates[date] {
-								row = append(row, successStyle.Render("✔"))
+								sb.WriteString(fmt.Sprintf("| %-9s", successStyle.Render(iconSuccess)))
 							} else {
-								row = append(row, errorStyle.Render("✖"))
+								sb.WriteString(fmt.Sprintf("| %-9s", errorStyle.Render(iconError)))
 							}
 						}
-						tableRows = append(tableRows, row)
+						sb.WriteString("\n")
 					}
 
-					// Create and style the table
-					t := table.New(
-						table.WithColumns(columns),
-						table.WithRows(tableRows),
-						table.WithFocused(false),
-						table.WithHeight(len(tableRows)),
-					)
-
-					// Style the table
-					s := table.DefaultStyles()
-					s.Header = s.Header.
-						BorderStyle(lipgloss.NormalBorder()).
-						BorderForeground(lipgloss.Color("#FF75B5")).
-						BorderBottom(true).
-						Bold(true)
-					s.Selected = s.Selected.
-						Foreground(lipgloss.Color("#000000")).
-						Background(lipgloss.Color("#ffffff")).
-						Bold(false)
-					t.SetStyles(s)
-
-					var sb strings.Builder
-					sb.WriteString(fmt.Sprintf("Activity Grid for %s:\n\n", m.className))
-					sb.WriteString(t.View() + "\n\n")
-					sb.WriteString("Legend:\n")
-					sb.WriteString(successStyle.Render("✔") + " - Pushed code on this day\n")
-					sb.WriteString(errorStyle.Render("✖") + " - No push activity\n")
+					sb.WriteString("\nLegend:\n")
+					sb.WriteString(successStyle.Render(fmt.Sprintf("%s - Pushed code on this day\n", iconSuccess)))
+					sb.WriteString(errorStyle.Render(fmt.Sprintf("%s - No push activity\n", iconError)))
 
 					m.output = sb.String()
 					m.state = stateOutput

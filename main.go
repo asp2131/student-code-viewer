@@ -11,11 +11,13 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	_ "github.com/mattn/go-sqlite3"
+
+	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 type GithubEvent struct {
@@ -311,6 +313,94 @@ func initialModel() model {
 		studentInput: studentInput,
 		output:       "",
 	}
+}
+
+// showWeekHistoryTview builds and runs a tview application that displays the weekly activity grid.
+func showWeekHistoryTview(className string) error {
+	start, end := getGridDateRange()
+	rows, err := db.Query(`
+		SELECT s.username 
+		FROM students s
+		JOIN classes c ON s.class_id = c.id
+		WHERE c.name = ?
+		ORDER BY s.username`,
+		className)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	// Create a tview table.
+	table := tview.NewTable().SetBorders(true)
+
+	// Header row.
+	table.SetCell(0, 0, tview.NewTableCell("Username").
+		SetTextColor(tcell.ColorYellow).
+		SetAlign(tview.AlignCenter).
+		SetSelectable(false))
+	col := 1
+	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		header := d.Format("Mon 01/02")
+		table.SetCell(0, col, tview.NewTableCell(header).
+			SetTextColor(tcell.ColorYellow).
+			SetAlign(tview.AlignCenter).
+			SetSelectable(false))
+		col++
+	}
+
+	// Fill in rows with student activity.
+	rowIndex := 1
+	for rows.Next() {
+		var username string
+		if err := rows.Scan(&username); err != nil {
+			return err
+		}
+
+		table.SetCell(rowIndex, 0, tview.NewTableCell(username).
+			SetTextColor(tcell.ColorWhite).
+			SetAlign(tview.AlignCenter))
+
+		col = 1
+		pushDates, err := getUserPushDates(username, start, end)
+		// If there's an error retrieving push data, assume no activity.
+		for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+			dateKey := d.Format("2006-01-02")
+			if err == nil && pushDates[dateKey] {
+				table.SetCell(rowIndex, col, tview.NewTableCell("✓").
+					SetTextColor(tcell.ColorGreen).
+					SetAlign(tview.AlignCenter))
+			} else {
+				table.SetCell(rowIndex, col, tview.NewTableCell("✖").
+					SetTextColor(tcell.ColorRed).
+					SetAlign(tview.AlignCenter))
+			}
+			col++
+		}
+		rowIndex++
+	}
+
+	// Create a legend.
+	legend := tview.NewTextView().
+		SetText("Legend: ✓ - Pushed code on this day, ✖ - No push activity").
+		SetTextColor(tcell.ColorYellow).
+		SetTextAlign(tview.AlignCenter)
+
+	// Layout: table above the legend.
+	flex := tview.NewFlex().SetDirection(tview.FlexRow).
+		AddItem(table, 0, 1, true).
+		AddItem(legend, 1, 1, false)
+
+	// Allow the user to exit the tview screen with Enter or Escape.
+	flex.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyEscape || event.Key() == tcell.KeyEnter {
+
+			return nil
+		}
+		return event
+	})
+
+	app := tview.NewApplication()
+	return app.SetRoot(flex, true).Run()
 }
 
 func (m model) Init() tea.Cmd {
@@ -615,93 +705,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.state = stateOutput
 					return m, nil
 
+				// NEW: Use tview for Week History.
 				case "Week History":
-					start, end := getGridDateRange()
-					rows, err := db.Query(`
-						SELECT s.username 
-						FROM students s
-						JOIN classes c ON s.class_id = c.id
-						WHERE c.name = ?
-						ORDER BY s.username`,
-						m.className)
-					if err != nil {
-						m.err = fmt.Errorf("failed to query students: %v", err)
-						return m, nil
+					// Launch the tview-based week history view.
+					if err := showWeekHistoryTview(m.className); err != nil {
+						m.err = err
+					} else {
+						m.output = "Returned from Week History view."
 					}
-					defer rows.Close()
-
-					// Create table columns
-					columns := []table.Column{
-						{Title: "Username", Width: 20},
-					}
-
-					// Add a column for each date
-					for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-						columns = append(columns, table.Column{
-							Title: d.Format("Mon 01/02"),
-							Width: 12, // Increased width to accommodate the date
-						})
-					}
-
-					// Create table rows
-					var tableRows []table.Row
-					for rows.Next() {
-						var username string
-						if err := rows.Scan(&username); err != nil {
-							m.err = err
-							return m, nil
-						}
-
-						pushDates, err := getUserPushDates(username, start, end)
-						if err != nil {
-							continue
-						}
-
-						// Create row starting with username
-						row := []string{username}
-
-						// Add activity status for each date
-						for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-							date := d.Format("2006-01-02")
-							if pushDates[date] {
-								row = append(row, "✓") // Using plain checkmark
-							} else {
-								row = append(row, "✖") // Using plain X
-							}
-						}
-
-						tableRows = append(tableRows, row)
-					}
-
-					// Create and style the table
-					t := table.New(
-						table.WithColumns(columns),
-						table.WithRows(tableRows),
-						table.WithFocused(true),
-						table.WithHeight(len(tableRows)+1), // Adjust height to show all rows plus header
-					)
-
-					s := table.DefaultStyles()
-					s.Header = s.Header.
-						BorderStyle(lipgloss.NormalBorder()).
-						BorderForeground(lipgloss.Color("240")).
-						BorderBottom(true).
-						Bold(false)
-					s.Selected = s.Selected.
-						Foreground(lipgloss.Color("229")).
-						Background(lipgloss.Color("57")).
-						Bold(false)
-					t.SetStyles(s)
-
-					// Create output with table and legend
-					var sb strings.Builder
-					sb.WriteString(fmt.Sprintf("Activity Grid for %s:\n\n", m.className))
-					sb.WriteString(baseStyle.Render(t.View()))
-					sb.WriteString("\n\nLegend:\n")
-					sb.WriteString(successStyle.Render("✓") + " - Pushed code on this day\n")
-					sb.WriteString(errorStyle.Render("✖") + " - No push activity\n")
-
-					m.output = sb.String()
 					m.state = stateOutput
 					return m, nil
 				}

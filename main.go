@@ -664,9 +664,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 							date := d.Format("2006-01-02")
 							if pushDates[date] {
-								row = append(row, "✓") // Using plain checkmark
+								row = append(row, successStyle.Render("✓")) // Using plain checkmark
 							} else {
-								row = append(row, "✖") // Using plain X
+								row = append(row, errorStyle.Render("✖")) // Using plain X
 							}
 						}
 

@@ -619,6 +619,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					var sb strings.Builder
 					sb.WriteString(fmt.Sprintf("Activity Grid for %s:\n", m.className))
 
+					// Build dates slice
+					var dates []time.Time
+					for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+						dates = append(dates, d)
+					}
+
 					// Create header style
 					headerStyle := lipgloss.NewStyle().
 						Bold(true).
@@ -626,7 +632,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					// Write the header row
 					sb.WriteString("Username           ") // 20 chars for username
-					for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+					for _, d := range dates {
 						date := d.Format("Mon 01/02")
 						sb.WriteString(fmt.Sprintf("| %s ", headerStyle.Render(date)))
 					}
@@ -653,7 +659,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 
 						sb.WriteString(fmt.Sprintf("%-20s", username))
-						for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+						for _, d := range dates {
 							date := d.Format("2006-01-02")
 							if pushDates[date] {
 								sb.WriteString(fmt.Sprintf("| %-9s", successStyle.Render(iconSuccess)))

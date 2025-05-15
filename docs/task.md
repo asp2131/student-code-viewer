@@ -16,7 +16,7 @@
 ## Phase 2 – Implement Class Management Submenu
 | ID | Task | Status |
 |----|------|-------|
-| T-5 | Break main.go into multiple files | 🔵 |
+| T-5 | Break main.go into multiple files | 🟡 |
 | T-6 | Create "Manage Students" submenu with Add/Delete/Back options | 🔵 |
 | T-7 | Create "Manage Repos" submenu with Clone/Pull/Clean/Back options | 🔵 |
 | T-8 | Create "View GH Activity" submenu with Week View/Check Activity/Back options | 🔵 |

@@ -238,7 +238,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					case "Create Class":
 						// Save current state to history
 						m.menuHistory = append(m.menuHistory, m.state)
-						
+
 						// Reset class input and switch to class input state
 						m.classInput.SetValue("")
 						m.classInput.Focus()
@@ -295,10 +295,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectedItem = 0 // Reset for the new menu
 					return m, nil
 				case 2: // View GH Activity
-					// TODO: Transition to stateViewActivity
-					m.output = "View GH Activity not yet implemented."
+					m.currentMenu = fmt.Sprintf("GitHub Activity for Class: %s", m.selectedClass)
 					m.menuHistory = append(m.menuHistory, m.state)
-					m.state = stateOutput
+					m.state = stateViewGHActivity
+					// Placeholder: create the actual menu for ViewGHActivity later
+					// For now, just set items or it will panic if list is empty on view
+					m.list = createViewGHActivityMenu(m.selectedClass) // This function needs to be created
 					return m, nil
 				case 3: // Delete Class
 					// TODO: Implement Delete Class confirmation and logic
@@ -312,7 +314,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.state = m.menuHistory[lastIndex]
 						m.menuHistory = m.menuHistory[:lastIndex]
 						m.currentMenu = "Select a Class" // Or derive from previous state
-						m.selectedItem = 0             // Reset selection
+						m.selectedItem = 0               // Reset selection
 						return m, nil
 					}
 					// If no history, go to main menu
@@ -358,7 +360,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						lastIndex := len(m.menuHistory) - 1
 						previousState := m.menuHistory[lastIndex]
 						m.menuHistory = m.menuHistory[:lastIndex]
-						
+
 						// Ensure we return to the correct previous state and menu
 						if previousState == stateClassManagement {
 							m.state = stateClassManagement
@@ -489,6 +491,52 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectedItem = 0
 					return m, nil
 				}
+			} else if m.state == stateViewGHActivity {
+				if msg.String() == "enter" {
+					selectedOptionIndex := m.list.Index()
+
+					// Options: 0: Week View, 1: Check Specific Activity, 2: Back
+					switch selectedOptionIndex {
+					case 0: // Week View
+						m.output = fmt.Sprintf("Week View for '%s' not yet implemented.", m.selectedClass)
+						m.menuHistory = append(m.menuHistory, m.state)
+						m.state = stateOutput
+						return m, nil
+					case 1: // Check Specific Activity
+						m.output = fmt.Sprintf("Check Specific Activity for '%s' not yet implemented.", m.selectedClass)
+						m.menuHistory = append(m.menuHistory, m.state)
+						m.state = stateOutput
+						return m, nil
+					case 2: // Back
+						if len(m.menuHistory) > 0 {
+							lastIndex := len(m.menuHistory) - 1
+							m.state = m.menuHistory[lastIndex]
+							m.menuHistory = m.menuHistory[:lastIndex]
+							// Restore the correct list and title for the previous state
+							switch m.state {
+							case stateClassManagement:
+								m.list = createClassManagementMenu(m.selectedClass)
+								m.currentMenu = fmt.Sprintf("Managing Class: %s", m.selectedClass)
+							}
+							m.selectedItem = 0 // Reset selection for the previous menu
+						} else {
+							// Should not happen if navigating from a menu, but as a fallback:
+							m.state = stateMainMenu
+							mainMenuItems := []list.Item{
+								Item{title: "Select Class", description: "Select an existing class to manage"},
+								Item{title: "Create Class", description: "Create a new class"},
+								Item{title: "Quit", description: "Exit the application"},
+							}
+							m.list.SetItems(mainMenuItems)
+							m.list.Title = "Student Code Viewer" // Reset title
+							m.currentMenu = "Main Menu"
+						}
+						return m, nil
+					}
+				}
+
+				// Handle other key presses for list navigation etc. if not Enter
+				// This part might already be handled by the general list update below
 			} else if m.state == stateClassInput { // Note: stateClassInput is for creating a new class name
 				// This was previously stateClassInput, ensure it's distinct from student input state
 				m.className = m.classInput.Value()
@@ -507,7 +555,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.state = stateOutput
 					// m.currentMenu will be set by stateOutput's logic or can be set here if needed
 					// Clear the menu history to ensure we go back to main menu
-					m.menuHistory = []int{stateMainMenu} 
+					m.menuHistory = []int{stateMainMenu}
 					return m, nil
 				}
 
@@ -597,25 +645,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Even if an error occurred, we transition to stateOutput to show the message.
 		// The menuHistory should have been set before transitioning to stateLoading.
-		m.state = stateOutput 
+		m.state = stateOutput
 		// m.currentMenu will be set by the View logic or stateOutput transition logic
 		// No need to Tick spinner anymore, operation is done.
 		return m, nil
 
-	// Handle other message types like textinput.BlurMsg if necessary
-	// case textinput.BlurMsg:
-	//    if msg.ID == m.classInput.ID() { ... }
+		// Handle other message types like textinput.BlurMsg if necessary
+		// case textinput.BlurMsg:
+		//    if msg.ID == m.classInput.ID() { ... }
 	}
 
 	var cmd tea.Cmd
 	// Handle text input updates only if an input field is focused
 	switch m.state {
-	case stateClassSelection, stateClassManagement:
+	case stateClassSelection, stateClassManagement, stateManageStudents, stateStudentSelectionForDelete, stateManageRepos:
 		m.list, cmd = m.list.Update(msg)
 	case stateClassInput:
 		m.classInput, cmd = m.classInput.Update(msg)
 	case stateStudentInput:
 		m.studentInput, cmd = m.studentInput.Update(msg)
+	case stateViewGHActivity:
+		m.list, cmd = m.list.Update(msg)
 	}
 
 	return m, cmd
@@ -715,8 +765,13 @@ func (m Model) View() string {
 	case stateOutput:
 		return docStyle.Render(
 			breadcrumbStyle.Render(m.currentMenu) + "\n" +
-				outputBoxStyle.Render(m.output + "\n\nPress Enter to continue."),
+				outputBoxStyle.Render(m.output+"\n\nPress Enter to continue."),
 		)
+
+	case stateViewGHActivity:
+		// m.list is populated by createViewGHActivityMenu and contains the correct items and title.
+		// m.list.Update(msg) in the Update function handles navigation (k/j, up/down).
+		return docStyle.Render(m.list.View())
 
 	default:
 		return "Loading..."

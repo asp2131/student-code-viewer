@@ -137,3 +137,22 @@ func createClassManagementMenu(className string) list.Model {
 
 	return l
 }
+
+// createViewGHActivityMenu creates a menu for viewing GitHub activity for a selected class
+func createViewGHActivityMenu(className string) list.Model {
+	items := []list.Item{
+		Item{title: "Week View", description: "View student activity for the past week"},
+		Item{title: "Check Specific Activity", description: "Check specific types of GitHub activity"},
+		Item{title: "Back", description: "Return to class management menu"},
+	}
+
+	l := list.New(items, list.NewDefaultDelegate(), 40, 12)
+	l.Title = "GH Activity for: " + className
+	l.SetShowStatusBar(false)
+	l.SetFilteringEnabled(false)
+	l.Styles.Title = titleStyle
+	l.Styles.PaginationStyle = paginationStyle
+	l.Styles.HelpStyle = helpStyle
+
+	return l
+}

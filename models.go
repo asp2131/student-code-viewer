@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 )
 
 // Item represents a menu item
@@ -25,32 +25,32 @@ type GithubEvent struct {
 
 // Model represents the state of the application.
 type Model struct {
-	list          list.Model      // For complex list views (if still used)
-	state         int             // Current application state
+	list  list.Model // For complex list views (if still used)
+	state int        // Current application state
 
 	// Input fields
-	classInput    textinput.Model // For new class name input
-	studentInput  textinput.Model // For new student name input
-	className     string        // Stores name of class being created or context
+	classInput   textinput.Model // For new class name input
+	studentInput textinput.Model // For new student name input
+	className    string          // Stores name of class being created or context
 
-	output        string        // Holds command output to be rendered in stateOutput
-	menuHistory   []int         // Stack to track menu navigation history for back functionality
-	classList     []string      // List of available classes for selection
-	selectedClass string        // Class context for operations like add/delete student, manage repos
+	output        string   // Holds command output to be rendered in stateOutput
+	menuHistory   []int    // Stack to track menu navigation history for back functionality
+	classList     []string // List of available classes for selection
+	selectedClass string   // Class context for operations like add/delete student, manage repos
 
 	// Fields for simple, list-based menus (primary UI component)
-	menuItems     []Item
-	selectedItem  int           // Index of the currently selected item in simple menus
-	currentMenu   string        // Title of the current menu for breadcrumb navigation
+	menuItems    []Item
+	selectedItem int    // Index of the currently selected item in simple menus
+	currentMenu  string // Title of the current menu for breadcrumb navigation
 
 	// Data for specific states/operations
-	studentList   []string      // List of students for selection (e.g., for deletion)
+	studentList []string // List of students for selection (e.g., for deletion)
 
 	// Loading state additions
-	spinner       spinner.Model // For loading animations
-	loadingMessage string       // Message to display during loading
+	spinner        spinner.Model // For loading animations
+	loadingMessage string        // Message to display during loading
 
-	err           error         // For general error messages in the model
+	err error // For general error messages in the model
 }
 
 // Required methods for list.Item interface
@@ -67,8 +67,8 @@ const (
 	stateClassSelection
 	stateClassManagement
 	stateManageStudents
-	stateManageRepos      // Placeholder for future state
-	stateViewGHActivity   // Placeholder for future state
+	stateManageRepos               // Placeholder for future state
+	stateViewGHActivity            // New state for View GitHub Activity submenu
 	stateStudentSelectionForDelete // New state for selecting a student to delete
 	stateDeleteConfirmation
 	stateLoading // New state for loading indicator

@@ -137,6 +137,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectedItem--
 				}
 				return m, nil
+			} else if m.state == stateManageRepos { // Added for Manage Repos menu
+				// Move selection up
+				if m.selectedItem > 0 {
+					m.selectedItem--
+				}
+				return m, nil
 			}
 
 		case "down", "j":
@@ -175,6 +181,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if m.state == stateStudentSelectionForDelete { // Added for student deletion selection menu
 				// Move selection down (studentList + Back option)
 				if m.selectedItem < len(m.studentList) { // studentList is 0-indexed, Back is at len(m.studentList)
+					m.selectedItem++
+				}
+				return m, nil
+			} else if m.state == stateManageRepos { // Added for Manage Repos menu
+				// Move selection down (4 items total)
+				// Items: "Clone All Repos", "Pull All Repos", "Clean All Repos", "Back"
+				if m.selectedItem < 3 { // 0, 1, 2, 3 are valid indices
 					m.selectedItem++
 				}
 				return m, nil
@@ -269,10 +282,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectedItem = 0 // Reset for the new menu
 					return m, nil
 				case 1: // Manage Repos
-					// TODO: Transition to stateManageRepos
-					m.output = "Manage Repos not yet implemented."
 					m.menuHistory = append(m.menuHistory, m.state)
-					m.state = stateOutput
+					m.state = stateManageRepos
+					m.currentMenu = "Manage Repositories: " + m.selectedClass
+					m.selectedItem = 0 // Reset for the new menu
 					return m, nil
 				case 2: // View GH Activity
 					// TODO: Transition to stateViewActivity
@@ -396,6 +409,64 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// The history should still have ManageStudents from when we entered StudentSelectionForDelete
 					m.state = stateOutput
 					// m.currentMenu will be set by stateOutput's logic or can be set here if needed
+					return m, nil
+				}
+			} else if m.state == stateManageRepos { // Added for Manage Repos menu
+				selectedOptionIndex := m.selectedItem
+				// 0: Clone, 1: Pull, 2: Clean, 3: Back
+
+				switch selectedOptionIndex {
+				case 0: // Clone All Repos
+					studentUsernames, err := getStudents(m.selectedClass)
+					if err != nil {
+						m.output = fmt.Sprintf("Error fetching students for class '%s': %v", m.selectedClass, err)
+					} else {
+						logs := cloneAllRepos(m.selectedClass, studentUsernames)
+						m.output = formatLogs(logs)
+					}
+					m.menuHistory = append(m.menuHistory, m.state)
+					m.state = stateOutput
+					return m, nil
+				case 1: // Pull All Repos
+					studentUsernames, err := getStudents(m.selectedClass)
+					if err != nil {
+						m.output = fmt.Sprintf("Error fetching students for class '%s': %v", m.selectedClass, err)
+					} else {
+						logs := pullAllRepos(m.selectedClass, studentUsernames)
+						m.output = formatLogs(logs)
+					}
+					m.menuHistory = append(m.menuHistory, m.state)
+					m.state = stateOutput
+					return m, nil
+				case 2: // Clean All Repos
+					// No need to fetch students for clean, it removes the whole class directory
+					logs := cleanAllRepos(m.selectedClass)
+					m.output = formatLogs(logs)
+					m.menuHistory = append(m.menuHistory, m.state)
+					m.state = stateOutput
+					return m, nil
+				case 3: // Back
+					if len(m.menuHistory) > 0 {
+						lastIndex := len(m.menuHistory) - 1
+						previousState := m.menuHistory[lastIndex]
+						m.menuHistory = m.menuHistory[:lastIndex]
+
+						if previousState == stateClassManagement {
+							m.state = stateClassManagement
+							m.currentMenu = "Managing Class: " + m.selectedClass
+							m.selectedItem = 0
+						} else {
+							// Fallback
+							m.state = stateMainMenu
+							m.currentMenu = "Main Menu"
+							m.selectedItem = 0
+						}
+						return m, nil
+					}
+					// Fallback if no history
+					m.state = stateMainMenu
+					m.currentMenu = "Main Menu"
+					m.selectedItem = 0
 					return m, nil
 				}
 			} else if m.state == stateClassInput { // Note: stateClassInput is for creating a new class name
@@ -566,6 +637,16 @@ func (m Model) View() string {
 		// Add Back option as the last item
 		studentDeleteItems[len(m.studentList)] = Item{title: "Back", description: "Return to manage students menu"}
 		return docStyle.Render(createSimpleMenuWithSelection("Delete Student from: "+m.selectedClass, studentDeleteItems, m.selectedItem))
+
+	case stateManageRepos:
+		// Create manage repositories menu items
+		repoManageItems := []Item{
+			{title: "Clone All Repos", description: "Clone all student repositories for this class"},
+			{title: "Pull All Repos", description: "Pull updates for all student repositories"},
+			{title: "Clean All Repos", description: "Remove all cloned repositories for this class"},
+			{title: "Back", description: "Return to class management menu"},
+		}
+		return docStyle.Render(createSimpleMenuWithSelection("Manage Repositories: "+m.selectedClass, repoManageItems, m.selectedItem))
 
 	case stateClassInput:
 		return docStyle.Render(

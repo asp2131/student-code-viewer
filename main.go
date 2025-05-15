@@ -35,13 +35,20 @@ var (
 	titleStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("#FF75B5")).
-			MarginLeft(2)
+			MarginLeft(2).
+			MarginTop(1).
+			MarginBottom(1)
 
 	outputBoxStyle = lipgloss.NewStyle().
 			Margin(1, 2).
 			Padding(1, 2).
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("#FF75B5"))
+			
+	breadcrumbStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#AAAAAA")).
+			MarginLeft(2).
+			MarginBottom(1)
 
 	successStyle = lipgloss.NewStyle().
 			Bold(true).
@@ -83,6 +90,12 @@ const (
 	stateClassInput
 	stateStudentInput
 	stateOutput
+	stateClassSelection
+	stateClassManagement
+	stateManageStudents
+	stateManageRepos
+	stateViewActivity
+	stateDeleteConfirmation
 )
 
 type item struct {
@@ -102,6 +115,10 @@ type model struct {
 	className    string
 	err          error
 	output       string // holds command output to be rendered in stateOutput
+	menuHistory  []int  // stack to track menu navigation history for back functionality
+	classList    []string // list of available classes for selection
+	selectedClass string  // currently selected class
+	currentMenu  string   // title of the current menu for breadcrumb navigation
 }
 
 func initDB() error {
@@ -272,19 +289,10 @@ func getUserPushDates(username string, start, end time.Time) (map[string]bool, e
 }
 
 func initialModel() model {
-	// Create main menu items
+	// Create top-level menu items (new structure with 3 main options)
 	items := []list.Item{
-		item{title: "Add Class", description: "Create a new class"},
-		item{title: "Remove Class", description: "Remove a class and its students"},
-		item{title: "List Classes", description: "Show all classes"},
-		item{title: "Add Students", description: "Add students to a class"},
-		item{title: "Remove Students", description: "Remove students from a class"},
-		item{title: "List Students", description: "Show all students in a class"},
-		item{title: "Clone Repositories", description: "Clone all student repositories"},
-		item{title: "Pull Changes", description: "Update all repositories"},
-		item{title: "Clean Changes", description: "Revert local changes"},
-		item{title: "Check Activity", description: "View recent student activity"},
-		item{title: "Week History", description: "Show weekly activity grid"},
+		item{title: "Manage Classes", description: "Select and manage an existing class"},
+		item{title: "Create Class", description: "Create a new class"},
 		item{title: "Quit", description: "Exit the application"},
 	}
 
@@ -312,6 +320,10 @@ func initialModel() model {
 		classInput:   classInput,
 		studentInput: studentInput,
 		output:       "",
+		menuHistory:  []int{},
+		classList:    []string{},
+		selectedClass: "",
+		currentMenu:  "Main Menu",
 	}
 }
 
@@ -420,16 +432,83 @@ func (m model) Init() tea.Cmd {
 	return nil
 }
 
+// Helper function to load available classes from the database
+func loadClasses() ([]string, error) {
+	rows, err := db.Query("SELECT name FROM classes ORDER BY name")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var classes []string
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		classes = append(classes, name)
+	}
+	return classes, nil
+}
+
+// Helper function to create class selection menu
+func createClassSelectionMenu(classes []string) list.Model {
+	items := make([]list.Item, len(classes))
+	for i, class := range classes {
+		items[i] = item{title: class, description: "Select to manage this class"}
+	}
+
+	l := list.New(items, list.NewDefaultDelegate(), 40, 12)
+	l.Title = "Select a Class"
+	l.SetShowStatusBar(false)
+	l.SetFilteringEnabled(false)
+	l.Styles.Title = titleStyle
+	l.Styles.PaginationStyle = paginationStyle
+	l.Styles.HelpStyle = helpStyle
+
+	return l
+}
+
+// Helper function to create class management menu
+func createClassManagementMenu(className string) list.Model {
+	items := []list.Item{
+		item{title: "Manage Students", description: "Add or remove students"},
+		item{title: "Manage Repos", description: "Clone, pull, or clean repositories"},
+		item{title: "View GH Activity", description: "Check student GitHub activity"},
+		item{title: "Delete Class", description: "Delete this class and its data"},
+		item{title: "Back", description: "Return to main menu"},
+	}
+
+	l := list.New(items, list.NewDefaultDelegate(), 40, 12)
+	l.Title = "Managing Class: " + className
+	l.SetShowStatusBar(false)
+	l.SetFilteringEnabled(false)
+	l.Styles.Title = titleStyle
+	l.Styles.PaginationStyle = paginationStyle
+	l.Styles.HelpStyle = helpStyle
+
+	return l
+}
+
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// If we're in the output view, any Enter or Esc returns to the main menu.
+	// If we're in the output view, any Enter or Esc returns to the previous menu.
 	if m.state == stateOutput {
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
 			if keyMsg.String() == "enter" || keyMsg.String() == "esc" {
-				m.state = stateMainMenu
+				// Pop the last state from the history if available
+				if len(m.menuHistory) > 0 {
+					lastIndex := len(m.menuHistory) - 1
+					m.state = m.menuHistory[lastIndex]
+					m.menuHistory = m.menuHistory[:lastIndex] // Remove the last item
+				} else {
+					m.state = stateMainMenu
+				}
 			}
 		}
 		return m, nil
 	}
+	
+	// We'll handle list updates at the end of the function to ensure key presses are processed
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -444,36 +523,115 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					switch i.title {
 					case "Quit":
 						return m, tea.Quit
-					case "Add Class", "Remove Class", "List Students", "Clone Repositories",
-						"Pull Changes", "Clean Changes", "Check Activity", "Week History":
-						m.state = stateClassInput
-						return m, nil
-					case "Add Students":
-						m.state = stateClassInput
-						m.className = ""
-						return m, nil
-					case "List Classes":
-						rows, err := db.Query("SELECT name FROM classes")
+					case "Manage Classes":
+						// Load available classes
+						classes, err := loadClasses()
 						if err != nil {
 							m.err = err
+							m.output = fmt.Sprintf("Error loading classes: %v", err)
+							m.menuHistory = append(m.menuHistory, m.state)
+							m.state = stateOutput
 							return m, nil
 						}
-						defer rows.Close()
-
-						var sb strings.Builder
-						sb.WriteString("Classes:\n")
-						for rows.Next() {
-							var name string
-							rows.Scan(&name)
-							sb.WriteString(fmt.Sprintf("- %s\n", name))
+						
+						if len(classes) == 0 {
+							m.output = "No classes found. Please create a class first."
+							m.menuHistory = append(m.menuHistory, m.state)
+							m.state = stateOutput
+							return m, nil
 						}
-						m.output = sb.String()
+						
+						// Save the current state to history for back navigation
+						m.menuHistory = append(m.menuHistory, m.state)
+						
+						// Create and set the class selection menu
+						m.list = createClassSelectionMenu(classes)
+						m.classList = classes
+						m.currentMenu = "Class Selection"
+						m.state = stateClassSelection
+						return m, nil
+						
+					case "Create Class":
+						// Save current state to history
+						m.menuHistory = append(m.menuHistory, m.state)
+						m.state = stateClassInput
+						m.currentMenu = "Create Class"
+						return m, nil
+					}
+				}
+			} else if m.state == stateClassSelection {
+				// Handle class selection
+				i, ok := m.list.SelectedItem().(item)
+				if ok {
+					// Save the selected class name
+					m.selectedClass = i.title
+					
+					// Save current state to history
+					m.menuHistory = append(m.menuHistory, m.state)
+					
+					// Create and set the class management menu
+					m.list = createClassManagementMenu(m.selectedClass)
+					m.currentMenu = "Class Management: " + m.selectedClass
+					m.state = stateClassManagement
+					return m, nil
+				}
+			} else if m.state == stateClassManagement {
+				// Handle class management menu selection
+				i, ok := m.list.SelectedItem().(item)
+				if ok {
+					switch i.title {
+					case "Back":
+						// Pop the last state from history
+						if len(m.menuHistory) > 0 {
+							lastIndex := len(m.menuHistory) - 1
+							m.state = m.menuHistory[lastIndex]
+							m.menuHistory = m.menuHistory[:lastIndex]
+							
+							// Reset to main menu
+							items := []list.Item{
+								item{title: "Manage Classes", description: "Select and manage an existing class"},
+								item{title: "Create Class", description: "Create a new class"},
+								item{title: "Quit", description: "Exit the application"},
+							}
+							m.list = list.New(items, list.NewDefaultDelegate(), 40, 12)
+							m.list.Title = "Student Code Viewer"
+							m.list.SetShowStatusBar(false)
+							m.list.SetFilteringEnabled(false)
+							m.list.Styles.Title = titleStyle
+							m.list.Styles.PaginationStyle = paginationStyle
+							m.list.Styles.HelpStyle = helpStyle
+							m.currentMenu = "Main Menu"
+						}
+						return m, nil
+						
+					// Implement other class management options here
+					// For now, we'll just show a placeholder message
+					default:
+						m.output = fmt.Sprintf("Selected option: %s for class %s\nThis feature will be implemented in Phase 2.", i.title, m.selectedClass)
+						m.menuHistory = append(m.menuHistory, m.state)
 						m.state = stateOutput
 						return m, nil
 					}
 				}
 			} else if m.state == stateClassInput {
 				m.className = m.classInput.Value()
+				
+				// Check if this is from the main menu's Create Class option
+				if m.currentMenu == "Create Class" {
+					_, err := db.Exec("INSERT INTO classes (name) VALUES (?)", m.className)
+					if err != nil {
+						m.err = err
+						return m, nil
+					}
+					m.output = fmt.Sprintf("Added class: %s\n", m.className)
+					
+					// Save current state to history before transitioning
+					m.menuHistory = append(m.menuHistory, m.state)
+					m.state = stateOutput
+					return m, nil
+				}
+				
+				// Handle the legacy code paths
 				i, _ := m.list.SelectedItem().(item)
 
 				if i.title == "Add Students" {
@@ -759,7 +917,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	switch m.state {
-	case stateMainMenu:
+	case stateMainMenu, stateClassSelection, stateClassManagement:
+		// Already handled above, but including here for completeness
 		m.list, cmd = m.list.Update(msg)
 	case stateClassInput:
 		m.classInput, cmd = m.classInput.Update(msg)
@@ -771,24 +930,47 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
+	// Handle any error
+	if m.err != nil {
+		errorMsg := errorStyle.Render(fmt.Sprintf("Error: %v", m.err))
+		m.err = nil // Clear the error after displaying it
+		return docStyle.Render(errorMsg + "\n\nPress Enter/Esc to continue.")
+	}
+	
+	// Create breadcrumb navigation
+	breadcrumb := breadcrumbStyle.Render(m.currentMenu)
+	
 	switch m.state {
 	case stateMainMenu:
-		return docStyle.Render(m.list.View())
+		return docStyle.Render(breadcrumb + "\n" + m.list.View())
+		
+	case stateClassSelection:
+		return docStyle.Render(breadcrumb + "\n" + m.list.View())
+		
+	case stateClassManagement:
+		return docStyle.Render(breadcrumb + "\n" + m.list.View())
+		
 	case stateClassInput:
 		return docStyle.Render(
+			breadcrumb + "\n" +
 			titleStyle.Render("Enter Class Name") + "\n\n" +
-				m.classInput.View(),
+			m.classInput.View(),
 		)
+		
 	case stateStudentInput:
 		return docStyle.Render(
+			breadcrumb + "\n" +
 			titleStyle.Render("Enter Student Usernames") + "\n" +
-				"(Space-separated list of GitHub usernames)\n\n" +
-				m.studentInput.View(),
+			"(Space-separated list of GitHub usernames)\n\n" +
+			m.studentInput.View(),
 		)
+		
 	case stateOutput:
 		return docStyle.Render(
+			breadcrumb + "\n" +
 			outputBoxStyle.Render(m.output + "\n\nPress Enter/Esc to go back."),
 		)
+		
 	default:
 		return "Loading..."
 	}

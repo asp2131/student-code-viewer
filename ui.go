@@ -54,6 +54,10 @@ var (
 	baseStyle = lipgloss.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderForeground(lipgloss.Color("240"))
+
+	inputStyleFocused = lipgloss.NewStyle().BorderForeground(lipgloss.Color("205")).Padding(0, 1).Border(lipgloss.RoundedBorder()).Width(40)
+	inputStyleBlurred = lipgloss.NewStyle().BorderForeground(lipgloss.Color("240")).Padding(0, 1).Border(lipgloss.RoundedBorder()).Width(40)
+	secondaryTextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
 )
 
 // Icons for status indicators

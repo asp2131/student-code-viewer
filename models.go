@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/spinner"
 )
 
 // Item represents a menu item
@@ -22,24 +23,34 @@ type GithubEvent struct {
 	} `json:"repo"`
 }
 
-// Model represents the application state
+// Model represents the state of the application.
 type Model struct {
-	list          list.Model
-	state         int
-	classInput    textinput.Model
-	studentInput  textinput.Model
-	className     string
-	err           error
-	output        string   // holds command output to be rendered in stateOutput
-	menuHistory   []int    // stack to track menu navigation history for back functionality
-	classList     []string // list of available classes for selection
-	selectedClass string   // currently selected class
-	currentMenu   string   // title of the current menu for breadcrumb navigation
+	list          list.Model      // For complex list views (if still used)
+	state         int             // Current application state
 
-	// Simple menu fields
-	menuItems    []Item
-	selectedItem int    // index of the currently selected item
-	studentList  []string // List of students for selection (e.g., for deletion)
+	// Input fields
+	classInput    textinput.Model // For new class name input
+	studentInput  textinput.Model // For new student name input
+	className     string        // Stores name of class being created or context
+
+	output        string        // Holds command output to be rendered in stateOutput
+	menuHistory   []int         // Stack to track menu navigation history for back functionality
+	classList     []string      // List of available classes for selection
+	selectedClass string        // Class context for operations like add/delete student, manage repos
+
+	// Fields for simple, list-based menus (primary UI component)
+	menuItems     []Item
+	selectedItem  int           // Index of the currently selected item in simple menus
+	currentMenu   string        // Title of the current menu for breadcrumb navigation
+
+	// Data for specific states/operations
+	studentList   []string      // List of students for selection (e.g., for deletion)
+
+	// Loading state additions
+	spinner       spinner.Model // For loading animations
+	loadingMessage string       // Message to display during loading
+
+	err           error         // For general error messages in the model
 }
 
 // Required methods for list.Item interface
@@ -60,4 +71,12 @@ const (
 	stateViewGHActivity   // Placeholder for future state
 	stateStudentSelectionForDelete // New state for selecting a student to delete
 	stateDeleteConfirmation
+	stateLoading // New state for loading indicator
 )
+
+// operationResultMsg is sent when a background operation (like cloning) completes.
+// It carries the logs or an error if one occurred.
+type operationResultMsg struct {
+	logs []string
+	err  error
+}

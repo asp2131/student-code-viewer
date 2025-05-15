@@ -5,8 +5,10 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func initialModel() Model {
@@ -26,10 +28,14 @@ func initialModel() Model {
 	classInput.Width = 40
 
 	studentInput := textinput.New()
-	studentInput.Placeholder = "Enter student GitHub usernames (space-separated)"
+	studentInput.Placeholder = "Enter student GitHub username(s), comma-separated"
 	studentInput.Focus()
 	studentInput.CharLimit = 200
 	studentInput.Width = 40
+
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
 
 	// Create main menu items
 	menuItems := []Item{
@@ -44,13 +50,14 @@ func initialModel() Model {
 		classInput:    classInput,
 		studentInput:  studentInput,
 		output:        "",
-		menuHistory:   []int{},
+		menuHistory:   make([]int, 0),
 		classList:     []string{},
 		selectedClass: "",
 		currentMenu:   "Main Menu",
 		menuItems:     menuItems,
 		studentList:   []string{}, // Initialize studentList
 		selectedItem:  0,
+		spinner:       s, // Initialize spinner
 	}
 }
 
@@ -417,34 +424,47 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				switch selectedOptionIndex {
 				case 0: // Clone All Repos
-					studentUsernames, err := getStudents(m.selectedClass)
-					if err != nil {
-						m.output = fmt.Sprintf("Error fetching students for class '%s': %v", m.selectedClass, err)
-					} else {
-						logs := cloneAllRepos(m.selectedClass, studentUsernames)
-						m.output = formatLogs(logs)
-					}
-					m.menuHistory = append(m.menuHistory, m.state)
-					m.state = stateOutput
-					return m, nil
+					m.menuHistory = append(m.menuHistory, m.state) // Ensure this is called before stateLoading
+					m.state = stateLoading
+					m.loadingMessage = fmt.Sprintf("Cloning all repositories for class '%s'...", m.selectedClass)
+					return m, tea.Batch(
+						m.spinner.Tick,
+						func() tea.Msg {
+							studentUsernames, err := getStudents(m.selectedClass)
+							if err != nil {
+								return operationResultMsg{err: fmt.Errorf("Error fetching students for class '%s': %w", m.selectedClass, err)}
+							}
+							logs := cloneAllRepos(m.selectedClass, studentUsernames)
+							return operationResultMsg{logs: logs}
+						},
+					)
 				case 1: // Pull All Repos
-					studentUsernames, err := getStudents(m.selectedClass)
-					if err != nil {
-						m.output = fmt.Sprintf("Error fetching students for class '%s': %v", m.selectedClass, err)
-					} else {
-						logs := pullAllRepos(m.selectedClass, studentUsernames)
-						m.output = formatLogs(logs)
-					}
-					m.menuHistory = append(m.menuHistory, m.state)
-					m.state = stateOutput
-					return m, nil
+					m.menuHistory = append(m.menuHistory, m.state) // Ensure this is called before stateLoading
+					m.state = stateLoading
+					m.loadingMessage = fmt.Sprintf("Pulling all repositories for class '%s'...", m.selectedClass)
+					return m, tea.Batch(
+						m.spinner.Tick,
+						func() tea.Msg {
+							studentUsernames, err := getStudents(m.selectedClass)
+							if err != nil {
+								return operationResultMsg{err: fmt.Errorf("Error fetching students for class '%s': %w", m.selectedClass, err)}
+							}
+							logs := pullAllRepos(m.selectedClass, studentUsernames)
+							return operationResultMsg{logs: logs}
+						},
+					)
 				case 2: // Clean All Repos
-					// No need to fetch students for clean, it removes the whole class directory
-					logs := cleanAllRepos(m.selectedClass)
-					m.output = formatLogs(logs)
-					m.menuHistory = append(m.menuHistory, m.state)
-					m.state = stateOutput
-					return m, nil
+					m.menuHistory = append(m.menuHistory, m.state) // Ensure this is called before stateLoading
+					m.state = stateLoading
+					m.loadingMessage = fmt.Sprintf("Cleaning all repositories for class '%s'...", m.selectedClass)
+					return m, tea.Batch(
+						m.spinner.Tick,
+						func() tea.Msg {
+							// No need to fetch students for clean, it removes the whole class directory
+							logs := cleanAllRepos(m.selectedClass)
+							return operationResultMsg{logs: logs}
+						},
+					)
 				case 3: // Back
 					if len(m.menuHistory) > 0 {
 						lastIndex := len(m.menuHistory) - 1
@@ -561,15 +581,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-	// Handle window resize
-	case tea.WindowSizeMsg:
-		// Update list height
-		h, v := docStyle.GetFrameSize()
-		m.list.SetSize(msg.Width-h, msg.Height-v)
+	// Add these cases to handle new messages for loading state
+	case spinner.TickMsg: // For animating the spinner
+		var cmd tea.Cmd
+		if m.state == stateLoading {
+			m.spinner, cmd = m.spinner.Update(msg)
+		}
+		return m, cmd
+
+	case operationResultMsg: // Custom message type for when repo operations complete
+		if msg.err != nil {
+			m.output = fmt.Sprintf("Operation failed: %v", msg.err)
+		} else {
+			m.output = formatLogs(msg.logs)
+		}
+		// Even if an error occurred, we transition to stateOutput to show the message.
+		// The menuHistory should have been set before transitioning to stateLoading.
+		m.state = stateOutput 
+		// m.currentMenu will be set by the View logic or stateOutput transition logic
+		// No need to Tick spinner anymore, operation is done.
+		return m, nil
+
+	// Handle other message types like textinput.BlurMsg if necessary
+	// case textinput.BlurMsg:
+	//    if msg.ID == m.classInput.ID() { ... }
 	}
 
-	// Update the list model or text inputs
 	var cmd tea.Cmd
+	// Handle text input updates only if an input field is focused
 	switch m.state {
 	case stateClassSelection, stateClassManagement:
 		m.list, cmd = m.list.Update(msg)
@@ -663,6 +702,15 @@ func (m Model) View() string {
 				"(Space-separated list of GitHub usernames)\n\n" +
 				m.studentInput.View(),
 		)
+
+	case stateLoading: // New view for loading state
+		breadcrumb := breadcrumbStyle.Render(m.currentMenu)
+		return docStyle.Render(fmt.Sprintf("%s\n\n%s %s\n\n%s",
+			breadcrumb,
+			m.spinner.View(),
+			m.loadingMessage,
+			secondaryTextStyle.Render("(Press Esc to attempt to cancel or Ctrl+C to quit)"), // Note: Cancellation isn't implemented yet
+		))
 
 	case stateOutput:
 		return docStyle.Render(

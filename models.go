@@ -39,6 +39,7 @@ type Model struct {
 	// Simple menu fields
 	menuItems    []Item
 	selectedItem int    // index of the currently selected item
+	studentList  []string // List of students for selection (e.g., for deletion)
 }
 
 // Required methods for list.Item interface
@@ -55,7 +56,8 @@ const (
 	stateClassSelection
 	stateClassManagement
 	stateManageStudents
-	stateManageRepos
-	stateViewActivity
+	stateManageRepos      // Placeholder for future state
+	stateViewGHActivity   // Placeholder for future state
+	stateStudentSelectionForDelete // New state for selecting a student to delete
 	stateDeleteConfirmation
 )

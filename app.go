@@ -49,6 +49,7 @@ func initialModel() Model {
 		selectedClass: "",
 		currentMenu:   "Main Menu",
 		menuItems:     menuItems,
+		studentList:   []string{}, // Initialize studentList
 		selectedItem:  0,
 	}
 }
@@ -130,6 +131,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectedItem--
 				}
 				return m, nil
+			} else if m.state == stateStudentSelectionForDelete { // Added for student deletion selection menu
+				// Move selection up
+				if m.selectedItem > 0 {
+					m.selectedItem--
+				}
+				return m, nil
 			}
 
 		case "down", "j":
@@ -162,6 +169,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Move selection down in manage students menu (3 items total)
 				// Items: "Add Student(s)", "Delete Student", "Back"
 				if m.selectedItem < 2 { // 0, 1, 2 are valid indices
+					m.selectedItem++
+				}
+				return m, nil
+			} else if m.state == stateStudentSelectionForDelete { // Added for student deletion selection menu
+				// Move selection down (studentList + Back option)
+				if m.selectedItem < len(m.studentList) { // studentList is 0-indexed, Back is at len(m.studentList)
 					m.selectedItem++
 				}
 				return m, nil
@@ -303,10 +316,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectedItem = 0 // Reset for student input (though not a menu)
 					return m, textinput.Blink
 				case 1: // Delete Student
-					// TODO: Implement student selection and deletion logic
-					m.output = "Delete Student not yet implemented."
+					students, err := getStudents(m.selectedClass)
+					if err != nil {
+						m.err = fmt.Errorf("failed to get students for class '%s': %w", m.selectedClass, err)
+						return m, nil
+					}
+					if len(students) == 0 {
+						m.output = fmt.Sprintf("No students found in class '%s' to delete.", m.selectedClass)
+						m.menuHistory = append(m.menuHistory, m.state)
+						m.state = stateOutput
+						return m, nil
+					}
+					m.studentList = students
 					m.menuHistory = append(m.menuHistory, m.state)
-					m.state = stateOutput
+					m.state = stateStudentSelectionForDelete
+					m.currentMenu = "Delete Student from: " + m.selectedClass
+					m.selectedItem = 0 // Reset for the new student selection menu
 					return m, nil
 				case 2: // Back
 					if len(m.menuHistory) > 0 {
@@ -333,6 +358,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectedItem = 0
 					return m, nil
 				}
+			} else if m.state == stateStudentSelectionForDelete { // Added for student deletion menu
+				selectedStudentIndex := m.selectedItem
+
+				if selectedStudentIndex == len(m.studentList) { // "Back" option selected
+					if len(m.menuHistory) > 0 {
+						lastIndex := len(m.menuHistory) - 1
+						previousState := m.menuHistory[lastIndex]
+						m.menuHistory = m.menuHistory[:lastIndex]
+
+						if previousState == stateManageStudents {
+							m.state = stateManageStudents
+							m.currentMenu = "Manage Students: " + m.selectedClass
+							m.selectedItem = 0
+						} else {
+							// Fallback
+							m.state = stateMainMenu
+							m.currentMenu = "Main Menu"
+							m.selectedItem = 0
+						}
+						return m, nil
+					}
+					// Fallback if no history
+					m.state = stateMainMenu
+					m.currentMenu = "Main Menu"
+					m.selectedItem = 0
+					return m, nil
+				} else if selectedStudentIndex < len(m.studentList) { // A student is selected
+					studentToDelete := m.studentList[selectedStudentIndex]
+					err := deleteStudent(m.selectedClass, studentToDelete)
+					if err != nil {
+						m.output = fmt.Sprintf("Error deleting student '%s': %v", studentToDelete, err)
+					} else {
+						m.output = fmt.Sprintf("Successfully deleted student '%s' from class '%s'.", studentToDelete, m.selectedClass)
+					}
+					// After deletion (or error), go to output state, then allow user to return to Manage Students
+					// The history should still have ManageStudents from when we entered StudentSelectionForDelete
+					m.state = stateOutput
+					// m.currentMenu will be set by stateOutput's logic or can be set here if needed
+					return m, nil
+				}
 			} else if m.state == stateClassInput { // Note: stateClassInput is for creating a new class name
 				// This was previously stateClassInput, ensure it's distinct from student input state
 				m.className = m.classInput.Value()
@@ -349,6 +414,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Set up to return to main menu after showing output
 					// Don't save class input state in history, so we go directly to main menu
 					m.state = stateOutput
+					// m.currentMenu will be set by stateOutput's logic or can be set here if needed
 					// Clear the menu history to ensure we go back to main menu
 					m.menuHistory = []int{stateMainMenu} 
 					return m, nil
@@ -490,6 +556,16 @@ func (m Model) View() string {
 			{title: "Back", description: "Return to class management menu"},
 		}
 		return docStyle.Render(createSimpleMenuWithSelection("Manage Students: "+m.selectedClass, studentManageItems, m.selectedItem))
+
+	case stateStudentSelectionForDelete:
+		// Convert student list to menu items and add a Back option
+		studentDeleteItems := make([]Item, len(m.studentList)+1) // +1 for Back option
+		for i, studentName := range m.studentList {
+			studentDeleteItems[i] = Item{title: studentName, description: "Select to delete this student"}
+		}
+		// Add Back option as the last item
+		studentDeleteItems[len(m.studentList)] = Item{title: "Back", description: "Return to manage students menu"}
+		return docStyle.Render(createSimpleMenuWithSelection("Delete Student from: "+m.selectedClass, studentDeleteItems, m.selectedItem))
 
 	case stateClassInput:
 		return docStyle.Render(

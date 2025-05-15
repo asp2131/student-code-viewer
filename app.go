@@ -76,9 +76,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "esc":
-			// Allow escaping from class input back to main menu
+			// Allow escaping from class input (creating class) back to main menu
 			if m.state == stateClassInput && m.currentMenu == "Create Class" {
 				// Return to main menu
+				m.state = stateMainMenu
+				m.currentMenu = "Main Menu"
+				m.selectedItem = 0
+				return m, nil
+			} else if m.state == stateStudentInput { // Added for escaping student input
+				// Return to Manage Students menu
+				if len(m.menuHistory) > 0 {
+					lastIndex := len(m.menuHistory) - 1
+					previousState := m.menuHistory[lastIndex]
+					m.menuHistory = m.menuHistory[:lastIndex]
+
+					if previousState == stateManageStudents { // Ensure it's the correct previous state
+						m.state = stateManageStudents
+						m.currentMenu = "Manage Students: " + m.selectedClass
+						m.selectedItem = 0 // Reset selection for the manage students menu
+						return m, nil
+					}
+				}
+				// Fallback if history is empty or not what we expect (go to main menu)
 				m.state = stateMainMenu
 				m.currentMenu = "Main Menu"
 				m.selectedItem = 0
@@ -101,6 +120,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			} else if m.state == stateClassManagement {
 				// Move selection up in class management
+				if m.selectedItem > 0 {
+					m.selectedItem--
+				}
+				return m, nil
+			} else if m.state == stateManageStudents { // Added for Manage Students menu
+				// Move selection up in manage students menu
 				if m.selectedItem > 0 {
 					m.selectedItem--
 				}
@@ -130,6 +155,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					"Back",
 				}
 				if m.selectedItem < len(managementOptions)-1 {
+					m.selectedItem++
+				}
+				return m, nil
+			} else if m.state == stateManageStudents { // Added for Manage Students menu
+				// Move selection down in manage students menu (3 items total)
+				// Items: "Add Student(s)", "Delete Student", "Back"
+				if m.selectedItem < 2 { // 0, 1, 2 are valid indices
 					m.selectedItem++
 				}
 				return m, nil
@@ -212,47 +244,97 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 			} else if m.state == stateClassManagement {
-				// Handle class management menu selection
-				managementOptions := []string{
-					"Manage Students",
-					"Manage Repos",
-					"View GH Activity",
-					"Delete Class",
-					"Back",
-				}
-				
-				if m.selectedItem < len(managementOptions) {
-					selectedOption := managementOptions[m.selectedItem]
-					switch selectedOption {
-					case "Back":
-						if len(m.menuHistory) > 0 {
-							// Pop the last state from history
-							lastIndex := len(m.menuHistory) - 1
-							m.state = m.menuHistory[lastIndex]
-							m.menuHistory = m.menuHistory[:lastIndex]
+				// Determine selected option based on index
+				// 0: Manage Students, 1: Manage Repos, 2: View GH Activity, 3: Delete Class, 4: Back
+				selectedOptionIndex := m.selectedItem
 
-							// Reset to main menu
-							items := []Item{
-								{title: "Manage Classes", description: "Select and manage an existing class"},
-								{title: "Create Class", description: "Create a new class"},
-								{title: "Quit", description: "Exit the application"},
-							}
-							m.menuItems = items
-							m.selectedItem = 0
-							m.currentMenu = "Main Menu"
-						}
-						return m, nil
-
-					// Implement other class management options here
-					// For now, we'll just show a placeholder message
-					default:
-						m.output = fmt.Sprintf("Selected option: %s\nThis feature is coming soon!", selectedOption)
-						m.menuHistory = append(m.menuHistory, m.state)
-						m.state = stateOutput
+				switch selectedOptionIndex {
+				case 0: // Manage Students
+					m.menuHistory = append(m.menuHistory, m.state)
+					m.state = stateManageStudents
+					m.currentMenu = "Manage Students: " + m.selectedClass
+					m.selectedItem = 0 // Reset for the new menu
+					return m, nil
+				case 1: // Manage Repos
+					// TODO: Transition to stateManageRepos
+					m.output = "Manage Repos not yet implemented."
+					m.menuHistory = append(m.menuHistory, m.state)
+					m.state = stateOutput
+					return m, nil
+				case 2: // View GH Activity
+					// TODO: Transition to stateViewActivity
+					m.output = "View GH Activity not yet implemented."
+					m.menuHistory = append(m.menuHistory, m.state)
+					m.state = stateOutput
+					return m, nil
+				case 3: // Delete Class
+					// TODO: Implement Delete Class confirmation and logic
+					m.output = "Delete Class not yet implemented."
+					m.menuHistory = append(m.menuHistory, m.state)
+					m.state = stateOutput
+					return m, nil
+				case 4: // Back
+					if len(m.menuHistory) > 0 {
+						lastIndex := len(m.menuHistory) - 1
+						m.state = m.menuHistory[lastIndex]
+						m.menuHistory = m.menuHistory[:lastIndex]
+						m.currentMenu = "Select a Class" // Or derive from previous state
+						m.selectedItem = 0             // Reset selection
 						return m, nil
 					}
+					// If no history, go to main menu
+					m.state = stateMainMenu
+					m.currentMenu = "Main Menu"
+					m.selectedItem = 0
+					return m, nil
 				}
-			} else if m.state == stateClassInput {
+			} else if m.state == stateManageStudents { // Added for Manage Students menu
+				// Determine selected option based on index
+				// 0: Add Student(s), 1: Delete Student, 2: Back
+				selectedOptionIndex := m.selectedItem
+
+				switch selectedOptionIndex {
+				case 0: // Add Student(s)
+					m.menuHistory = append(m.menuHistory, m.state)
+					m.state = stateStudentInput
+					m.currentMenu = "Add Students to: " + m.selectedClass
+					m.studentInput.SetValue("") // Clear previous input
+					m.studentInput.Focus()
+					m.selectedItem = 0 // Reset for student input (though not a menu)
+					return m, textinput.Blink
+				case 1: // Delete Student
+					// TODO: Implement student selection and deletion logic
+					m.output = "Delete Student not yet implemented."
+					m.menuHistory = append(m.menuHistory, m.state)
+					m.state = stateOutput
+					return m, nil
+				case 2: // Back
+					if len(m.menuHistory) > 0 {
+						lastIndex := len(m.menuHistory) - 1
+						previousState := m.menuHistory[lastIndex]
+						m.menuHistory = m.menuHistory[:lastIndex]
+						
+						// Ensure we return to the correct previous state and menu
+						if previousState == stateClassManagement {
+							m.state = stateClassManagement
+							m.currentMenu = "Managing Class: " + m.selectedClass
+							m.selectedItem = 0 // Sensible default, or restore previous m.selectedItem for this menu
+						} else {
+							// Fallback if history is unexpected (should ideally not happen)
+							m.state = stateMainMenu
+							m.currentMenu = "Main Menu"
+							m.selectedItem = 0
+						}
+						return m, nil
+					}
+					// If no history, go to main menu
+					m.state = stateMainMenu
+					m.currentMenu = "Main Menu"
+					m.selectedItem = 0
+					return m, nil
+				}
+			} else if m.state == stateClassInput { // Note: stateClassInput is for creating a new class name
+				// This was previously stateClassInput, ensure it's distinct from student input state
 				m.className = m.classInput.Value()
 
 				// Check if this is from the main menu's Create Class option
@@ -310,8 +392,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if len(m.menuHistory) > 0 {
 					// Pop the last state from history
 					lastIndex := len(m.menuHistory) - 1
-					m.state = m.menuHistory[lastIndex]
+					previousState := m.menuHistory[lastIndex]
 					m.menuHistory = m.menuHistory[:lastIndex]
+					m.state = previousState // The state is now restored
+
+					// If returning to student input, clear it and set focus
+					if m.state == stateStudentInput {
+						m.currentMenu = "Add Students to: " + m.selectedClass // Restore title
+						m.studentInput.SetValue("")                           // Clear input
+						m.studentInput.Focus()                                // Re-focus
+						return m, textinput.Blink                             // Return blink command
+					} else {
+						// Restore appropriate menu title and selected item for other states
+						switch m.state {
+						case stateMainMenu:
+							m.currentMenu = "Main Menu"
+						case stateClassSelection:
+							m.currentMenu = "Select a Class"
+						case stateClassManagement:
+							m.currentMenu = "Managing Class: " + m.selectedClass
+						case stateManageStudents:
+							m.currentMenu = "Manage Students: " + m.selectedClass
+						}
+						m.selectedItem = 0 // Reset selection for menu states
+					}
 					return m, nil
 				}
 				// If no history, go to main menu
@@ -377,6 +481,15 @@ func (m Model) View() string {
 			{title: "Back", description: "Return to main menu"},
 		}
 		return docStyle.Render(createSimpleMenuWithSelection("Managing Class: "+m.selectedClass, manageItems, m.selectedItem))
+
+	case stateManageStudents:
+		// Create manage students menu items
+		studentManageItems := []Item{
+			{title: "Add Student(s)", description: "Add new students to this class"},
+			{title: "Delete Student", description: "Remove a student from this class"},
+			{title: "Back", description: "Return to class management menu"},
+		}
+		return docStyle.Render(createSimpleMenuWithSelection("Manage Students: "+m.selectedClass, studentManageItems, m.selectedItem))
 
 	case stateClassInput:
 		return docStyle.Render(

@@ -16,11 +16,12 @@
 ## Phase 2 – Implement Class Management Submenu
 | ID | Task | Status |
 |----|------|-------|
-| T-5 | Create "Manage Students" submenu with Add/Delete/Back options | 🔵 |
-| T-6 | Create "Manage Repos" submenu with Clone/Pull/Clean/Back options | 🔵 |
-| T-7 | Create "View GH Activity" submenu with Week View/Check Activity/Back options | 🔵 |
-| T-8 | Implement Delete Class option with confirmation prompt | 🔵 |
-| T-9 | Add Back navigation option to return to previous menu | 🔵 |
+| T-5 | Break main.go into multiple files | 🔵 |
+| T-6 | Create "Manage Students" submenu with Add/Delete/Back options | 🔵 |
+| T-7 | Create "Manage Repos" submenu with Clone/Pull/Clean/Back options | 🔵 |
+| T-8 | Create "View GH Activity" submenu with Week View/Check Activity/Back options | 🔵 |
+| T-9 | Implement Delete Class option with confirmation prompt | 🔵 |
+| T-10 | Add Back navigation option to return to previous menu | 🔵 |
 
 ## Phase 3 – Enhance UI/UX
 | ID | Task | Status |

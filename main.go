@@ -44,7 +44,7 @@ var (
 			Padding(1, 2).
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color("#FF75B5"))
-			
+
 	breadcrumbStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#AAAAAA")).
 			MarginLeft(2).
@@ -108,17 +108,21 @@ func (i item) Description() string { return i.description }
 func (i item) FilterValue() string { return i.title }
 
 type model struct {
-	list         list.Model
-	state        int
-	classInput   textinput.Model
-	studentInput textinput.Model
-	className    string
-	err          error
-	output       string // holds command output to be rendered in stateOutput
-	menuHistory  []int  // stack to track menu navigation history for back functionality
-	classList    []string // list of available classes for selection
-	selectedClass string  // currently selected class
-	currentMenu  string   // title of the current menu for breadcrumb navigation
+	list          list.Model
+	state         int
+	classInput    textinput.Model
+	studentInput  textinput.Model
+	className     string
+	err           error
+	output        string   // holds command output to be rendered in stateOutput
+	menuHistory   []int    // stack to track menu navigation history for back functionality
+	classList     []string // list of available classes for selection
+	selectedClass string   // currently selected class
+	currentMenu   string   // title of the current menu for breadcrumb navigation
+
+	// Simple menu fields
+	menuItems    []item // current menu items
+	selectedItem int    // index of the currently selected item
 }
 
 func initDB() error {
@@ -288,15 +292,52 @@ func getUserPushDates(username string, start, end time.Time) (map[string]bool, e
 	return pushDates, nil
 }
 
+// createSimpleMenu creates a string-based menu display that shows all options at once
+func createSimpleMenu(title string, options []item) string {
+	return createSimpleMenuWithSelection(title, options, 0)
+}
+
+// createSimpleMenuWithSelection creates a menu with a specific item selected
+func createSimpleMenuWithSelection(title string, options []item, selectedIndex int) string {
+	var sb strings.Builder
+
+	// Add title
+	sb.WriteString(titleStyle.Render(title) + "\n\n")
+
+	// Add all options
+	for i, opt := range options {
+		prefix := "  "
+		if i == selectedIndex {
+			// Highlight the selected option
+			prefix = "→ "
+			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF75B5")).Render(prefix+opt.title) + "\n")
+			sb.WriteString("  " + lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).Render(opt.description) + "\n\n")
+		} else {
+			sb.WriteString(prefix + opt.title + "\n")
+			sb.WriteString("  " + lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).Render(opt.description) + "\n\n")
+		}
+	}
+
+	// Add help text
+	sb.WriteString("\n" + helpStyle.Render("↑/k up • ↓/j down • enter select • q quit"))
+
+	return sb.String()
+}
+
 func initialModel() model {
 	// Create top-level menu items (new structure with 3 main options)
+	menuItems := []item{
+		{title: "Manage Classes", description: "Select and manage an existing class"},
+		{title: "Create Class", description: "Create a new class"},
+		{title: "Quit", description: "Exit the application"},
+	}
+
+	// Setup list (keep for backward compatibility)
 	items := []list.Item{
 		item{title: "Manage Classes", description: "Select and manage an existing class"},
 		item{title: "Create Class", description: "Create a new class"},
 		item{title: "Quit", description: "Exit the application"},
 	}
-
-	// Setup list
 	l := list.New(items, list.NewDefaultDelegate(), 40, 12)
 	l.Title = "Student Code Viewer"
 	l.SetShowStatusBar(false)
@@ -315,15 +356,17 @@ func initialModel() model {
 	studentInput.Focus()
 
 	return model{
-		list:         l,
-		state:        stateMainMenu,
-		classInput:   classInput,
-		studentInput: studentInput,
-		output:       "",
-		menuHistory:  []int{},
-		classList:    []string{},
+		list:          l,
+		state:         stateMainMenu,
+		classInput:    classInput,
+		studentInput:  studentInput,
+		output:        "",
+		menuHistory:   []int{},
+		classList:     []string{},
 		selectedClass: "",
-		currentMenu:  "Main Menu",
+		currentMenu:   "Main Menu",
+		menuItems:     menuItems,
+		selectedItem:  0,
 	}
 }
 
@@ -507,7 +550,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	
+
 	// We'll handle list updates at the end of the function to ensure key presses are processed
 
 	switch msg := msg.(type) {
@@ -516,11 +559,66 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q":
 			return m, tea.Quit
 
+		case "esc":
+			// Allow escaping from class input back to main menu
+			if m.state == stateClassInput && m.currentMenu == "Create Class" {
+				// Return to main menu
+				m.state = stateMainMenu
+				m.currentMenu = "Main Menu"
+				m.selectedItem = 0
+				return m, nil
+			}
+
+		// Handle menu navigation
+		case "up", "k":
+			if m.state == stateMainMenu {
+				// Move selection up in main menu
+				if m.selectedItem > 0 {
+					m.selectedItem--
+				}
+				return m, nil
+			} else if m.state == stateClassSelection {
+				// Move selection up in class selection menu
+				if m.selectedItem > 0 {
+					m.selectedItem--
+				}
+				return m, nil
+			} else if m.state == stateClassManagement {
+				// Move selection up in class management menu
+				if m.selectedItem > 0 {
+					m.selectedItem--
+				}
+				return m, nil
+			}
+
+		case "down", "j":
+			if m.state == stateMainMenu {
+				// Move selection down in main menu
+				if m.selectedItem < len(m.menuItems)-1 {
+					m.selectedItem++
+				}
+				return m, nil
+			} else if m.state == stateClassSelection {
+				// Move selection down in class selection menu
+				// Account for the additional Back option
+				if m.selectedItem < len(m.classList) { // Now includes the Back option
+					m.selectedItem++
+				}
+				return m, nil
+			} else if m.state == stateClassManagement {
+				// Move selection down in class management menu
+				if m.selectedItem < 4 { // 5 items in the management menu
+					m.selectedItem++
+				}
+				return m, nil
+			}
+
 		case "enter":
 			if m.state == stateMainMenu {
-				i, ok := m.list.SelectedItem().(item)
-				if ok {
-					switch i.title {
+				// Use the selectedItem index to determine which option was selected
+				if m.selectedItem < len(m.menuItems) {
+					selectedOption := m.menuItems[m.selectedItem].title
+					switch selectedOption {
 					case "Quit":
 						return m, tea.Quit
 					case "Manage Classes":
@@ -533,24 +631,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.state = stateOutput
 							return m, nil
 						}
-						
+
 						if len(classes) == 0 {
 							m.output = "No classes found. Please create a class first."
 							m.menuHistory = append(m.menuHistory, m.state)
 							m.state = stateOutput
 							return m, nil
 						}
-						
+
 						// Save the current state to history for back navigation
 						m.menuHistory = append(m.menuHistory, m.state)
-						
+
 						// Create and set the class selection menu
 						m.list = createClassSelectionMenu(classes)
 						m.classList = classes
 						m.currentMenu = "Class Selection"
 						m.state = stateClassSelection
 						return m, nil
-						
+
 					case "Create Class":
 						// Save current state to history
 						m.menuHistory = append(m.menuHistory, m.state)
@@ -560,33 +658,59 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			} else if m.state == stateClassSelection {
-				// Handle class selection
-				i, ok := m.list.SelectedItem().(item)
-				if ok {
+				// Handle class selection using the selectedItem index
+				if m.selectedItem == len(m.classList) {
+					// Back option selected - return to main menu
+					// Pop the last state from history
+					if len(m.menuHistory) > 0 {
+						lastIndex := len(m.menuHistory) - 1
+						m.state = m.menuHistory[lastIndex]
+						m.menuHistory = m.menuHistory[:lastIndex]
+
+						// Reset to main menu
+						m.selectedItem = 0
+						m.currentMenu = "Main Menu"
+					} else {
+						m.state = stateMainMenu
+						m.selectedItem = 0
+						m.currentMenu = "Main Menu"
+					}
+					return m, nil
+				} else if m.selectedItem < len(m.classList) {
 					// Save the selected class name
-					m.selectedClass = i.title
-					
+					m.selectedClass = m.classList[m.selectedItem]
+
 					// Save current state to history
 					m.menuHistory = append(m.menuHistory, m.state)
-					
+
 					// Create and set the class management menu
 					m.list = createClassManagementMenu(m.selectedClass)
 					m.currentMenu = "Class Management: " + m.selectedClass
 					m.state = stateClassManagement
+					m.selectedItem = 0 // Reset selection for the new menu
 					return m, nil
 				}
 			} else if m.state == stateClassManagement {
-				// Handle class management menu selection
-				i, ok := m.list.SelectedItem().(item)
-				if ok {
-					switch i.title {
+				// Handle class management menu selection using selectedItem index
+				// Define the options in the same order as they appear in the view
+				managementOptions := []string{
+					"Manage Students",
+					"Manage Repos",
+					"View GH Activity",
+					"Delete Class",
+					"Back",
+				}
+
+				if m.selectedItem < len(managementOptions) {
+					selectedOption := managementOptions[m.selectedItem]
+					switch selectedOption {
 					case "Back":
 						// Pop the last state from history
 						if len(m.menuHistory) > 0 {
 							lastIndex := len(m.menuHistory) - 1
 							m.state = m.menuHistory[lastIndex]
 							m.menuHistory = m.menuHistory[:lastIndex]
-							
+
 							// Reset to main menu
 							items := []list.Item{
 								item{title: "Manage Classes", description: "Select and manage an existing class"},
@@ -603,11 +727,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.currentMenu = "Main Menu"
 						}
 						return m, nil
-						
+
 					// Implement other class management options here
 					// For now, we'll just show a placeholder message
 					default:
-						m.output = fmt.Sprintf("Selected option: %s for class %s\nThis feature will be implemented in Phase 2.", i.title, m.selectedClass)
+						m.output = fmt.Sprintf("Selected option: %s for class %s\nThis feature will be implemented in Phase 2.", selectedOption, m.selectedClass)
 						m.menuHistory = append(m.menuHistory, m.state)
 						m.state = stateOutput
 						return m, nil
@@ -615,7 +739,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			} else if m.state == stateClassInput {
 				m.className = m.classInput.Value()
-				
+
 				// Check if this is from the main menu's Create Class option
 				if m.currentMenu == "Create Class" {
 					_, err := db.Exec("INSERT INTO classes (name) VALUES (?)", m.className)
@@ -623,14 +747,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.err = err
 						return m, nil
 					}
-					m.output = fmt.Sprintf("Added class: %s\n", m.className)
-					
-					// Save current state to history before transitioning
-					m.menuHistory = append(m.menuHistory, m.state)
+					m.output = fmt.Sprintf("Added class: %s\n\nPress Enter to return to main menu.", m.className)
+
+					// Set up to return to main menu after showing output
+					// Don't save class input state in history, so we go directly to main menu
 					m.state = stateOutput
+					// Clear the menu history to ensure we go back to main menu
+					m.menuHistory = []int{stateMainMenu}
 					return m, nil
 				}
-				
+
 				// Handle the legacy code paths
 				i, _ := m.list.SelectedItem().(item)
 
@@ -936,41 +1062,58 @@ func (m model) View() string {
 		m.err = nil // Clear the error after displaying it
 		return docStyle.Render(errorMsg + "\n\nPress Enter/Esc to continue.")
 	}
-	
+
 	// Create breadcrumb navigation
 	breadcrumb := breadcrumbStyle.Render(m.currentMenu)
-	
+
 	switch m.state {
 	case stateMainMenu:
-		return docStyle.Render(breadcrumb + "\n" + m.list.View())
-		
+		// Use our new simple menu display with the selected item highlighted
+		return docStyle.Render(createSimpleMenuWithSelection("Student Code Viewer", m.menuItems, m.selectedItem))
+
 	case stateClassSelection:
-		return docStyle.Render(breadcrumb + "\n" + m.list.View())
-		
+		// Convert class list to menu items and add a Back option
+		classItems := make([]item, len(m.classList)+1) // +1 for Back option
+		for i, class := range m.classList {
+			classItems[i] = item{title: class, description: "Select to manage this class"}
+		}
+		// Add Back option as the last item
+		classItems[len(m.classList)] = item{title: "Back", description: "Return to main menu"}
+		return docStyle.Render(createSimpleMenuWithSelection("Select a Class", classItems, m.selectedItem))
+
 	case stateClassManagement:
-		return docStyle.Render(breadcrumb + "\n" + m.list.View())
-		
+		// Create class management menu items
+		manageItems := []item{
+			{title: "Manage Students", description: "Add or remove students"},
+			{title: "Manage Repos", description: "Clone, pull, or clean repositories"},
+			{title: "View GH Activity", description: "Check student GitHub activity"},
+			{title: "Delete Class", description: "Delete this class and its data"},
+			{title: "Back", description: "Return to main menu"},
+		}
+		return docStyle.Render(createSimpleMenuWithSelection("Managing Class: "+m.selectedClass, manageItems, m.selectedItem))
+
 	case stateClassInput:
 		return docStyle.Render(
 			breadcrumb + "\n" +
-			titleStyle.Render("Enter Class Name") + "\n\n" +
-			m.classInput.View(),
+				titleStyle.Render("Enter Class Name") + "\n\n" +
+				m.classInput.View() + "\n\n" +
+				helpStyle.Render("Press Enter to confirm or Esc to cancel"),
 		)
-		
+
 	case stateStudentInput:
 		return docStyle.Render(
 			breadcrumb + "\n" +
-			titleStyle.Render("Enter Student Usernames") + "\n" +
-			"(Space-separated list of GitHub usernames)\n\n" +
-			m.studentInput.View(),
+				titleStyle.Render("Enter Student Usernames") + "\n" +
+				"(Space-separated list of GitHub usernames)\n\n" +
+				m.studentInput.View(),
 		)
-		
+
 	case stateOutput:
 		return docStyle.Render(
-			breadcrumb + "\n" +
-			outputBoxStyle.Render(m.output + "\n\nPress Enter/Esc to go back."),
+			breadcrumbStyle.Render(m.currentMenu) + "\n" +
+				outputBoxStyle.Render(m.output),
 		)
-		
+
 	default:
 		return "Loading..."
 	}

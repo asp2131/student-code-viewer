@@ -6,7 +6,7 @@ A CLI tool to easily manage and track student code submissions on GitHub.
 
 ```bash
 # For Mac/Linux:
-curl -sSL https://raw.githubusercontent.com/asp2131/student-code-viewer/main/install.sh | bash
+curl -sSL https://raw.githubusercontent.com/asp2131/student-code-viewer/main/scripts/install.sh | bash
 
 # OR install manually with Go:
 go install github.com/asp2131/student-code-viewer@latest

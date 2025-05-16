@@ -142,7 +142,7 @@ func createClassManagementMenu(className string) list.Model {
 func createViewGHActivityMenu(className string) list.Model {
 	items := []list.Item{
 		Item{title: "Week View", description: "View student activity for the past week"},
-		Item{title: "Check Specific Activity", description: "Check specific types of GitHub activity"},
+		Item{title: "Check Latest Activity", description: "Display the latest commit time for each student."},
 		Item{title: "Back", description: "Return to class management menu"},
 	}
 

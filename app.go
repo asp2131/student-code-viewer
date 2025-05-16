@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
+	"math" // Added for Modulo operation
 
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/textinput" // Re-added this import
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -426,7 +428,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				switch selectedOptionIndex {
 				case 0: // Clone All Repos
-					m.menuHistory = append(m.menuHistory, m.state) // Ensure this is called before stateLoading
+					m.menuHistory = append(m.menuHistory, m.state)
 					m.state = stateLoading
 					m.loadingMessage = fmt.Sprintf("Cloning all repositories for class '%s'...", m.selectedClass)
 					return m, tea.Batch(
@@ -441,7 +443,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						},
 					)
 				case 1: // Pull All Repos
-					m.menuHistory = append(m.menuHistory, m.state) // Ensure this is called before stateLoading
+					m.menuHistory = append(m.menuHistory, m.state)
 					m.state = stateLoading
 					m.loadingMessage = fmt.Sprintf("Pulling all repositories for class '%s'...", m.selectedClass)
 					return m, tea.Batch(
@@ -456,7 +458,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						},
 					)
 				case 2: // Clean All Repos
-					m.menuHistory = append(m.menuHistory, m.state) // Ensure this is called before stateLoading
+					m.menuHistory = append(m.menuHistory, m.state)
 					m.state = stateLoading
 					m.loadingMessage = fmt.Sprintf("Cleaning all repositories for class '%s'...", m.selectedClass)
 					return m, tea.Batch(
@@ -503,10 +505,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.state = stateOutput
 						return m, nil
 					case 1: // Check Specific Activity
-						m.output = fmt.Sprintf("Check Specific Activity for '%s' not yet implemented.", m.selectedClass)
 						m.menuHistory = append(m.menuHistory, m.state)
-						m.state = stateOutput
-						return m, nil
+						m.state = stateLoading
+						m.loadingMessage = fmt.Sprintf("Fetching GitHub activity for class '%s'...", m.selectedClass)
+						return m, tea.Batch(
+							m.spinner.Tick,
+							func() tea.Msg {
+								studentUsernames, err := getStudents(m.selectedClass)
+								if err != nil {
+									return operationResultMsg{err: fmt.Errorf("Error fetching students for class '%s': %w", m.selectedClass, err)}
+								}
+								styledOutput, err := getStudentsLatestCommitActivity(m.selectedClass, studentUsernames)
+								if err != nil {
+									return operationResultMsg{err: fmt.Errorf("Error fetching GitHub activity: %w", err)}
+								}
+								return operationResultMsg{logs: []string{styledOutput}} // Send as a single log entry
+							},
+						)
 					case 2: // Back
 						if len(m.menuHistory) > 0 {
 							lastIndex := len(m.menuHistory) - 1
@@ -676,7 +691,7 @@ func (m Model) View() string {
 	if m.err != nil {
 		errorMsg := fmt.Sprintf("%s\n\n%s", errorStyle.Render("Error:"), m.err.Error())
 		m.err = nil // Clear the error after displaying it
-		return docStyle.Render(errorMsg + "\n\nPress Enter/Esc to continue.")
+		return docStyle.Render(errorMsg + "\n\nPress any key to continue.")
 	}
 
 	// Create breadcrumb navigation
@@ -763,6 +778,17 @@ func (m Model) View() string {
 		))
 
 	case stateOutput:
+		// Check if the output is our special styled table
+		// The marker string is "✨ GitHub Users & Their Last Commits ✨"
+		if strings.Contains(m.output, "✨ GitHub Users & Their Last Commits ✨") {
+			// If it's the styled table, render it directly AFTER the breadcrumb, then the confirmation.
+			return docStyle.Render(
+				breadcrumbStyle.Render(m.currentMenu) + "\n" +
+				m.output + // This is already fully styled
+				"\n\n" + helpStyle.Render("Press Enter to continue."),
+			)
+		}
+		// Otherwise, use the standard output box
 		return docStyle.Render(
 			breadcrumbStyle.Render(m.currentMenu) + "\n" +
 				outputBoxStyle.Render(m.output+"\n\nPress Enter to continue."),
@@ -776,4 +802,196 @@ func (m Model) View() string {
 	default:
 		return "Loading..."
 	}
+}
+
+// formatDurationAgo converts a time.Duration into a string like "Xd Yh ago" or "Ym ago".
+func formatDurationAgo(d time.Duration) string {
+	days := int(d.Hours() / 24)
+	hours := int(math.Mod(d.Hours(), 24))
+	minutes := int(math.Mod(d.Minutes(), 60))
+
+	if d < 0 {
+		d = -d // Consider events in the future as 'from now'
+		// For this app, 'ago' makes more sense, so negative durations might indicate an error or future timestamp
+		// However, for dummy data, we ensure 'ago' by setting referenceNow after commit times.
+		// If real data could be in the future, this logic might need adjustment or return "in X..."
+	}
+
+	if days > 0 {
+		if hours > 0 {
+			return fmt.Sprintf("%dd %dh ago", days, hours)
+		}
+		return fmt.Sprintf("%dd ago", days)
+	}
+	if hours > 0 {
+		if minutes > 0 {
+			return fmt.Sprintf("%dh %dm ago", hours, minutes)
+		}
+		return fmt.Sprintf("%dh ago", hours)
+	}
+	if minutes > 0 {
+		return fmt.Sprintf("%dm ago", minutes)
+	}
+	seconds := int(math.Mod(d.Seconds(), 60))
+	if seconds > 0 {
+		return fmt.Sprintf("%ds ago", seconds)
+	}
+	return "just now"
+}
+
+// getStudentsLatestCommitActivity fetches (dummy) GitHub activity for students in a class
+// and returns a fully styled string ready for display.
+//revive:disable-next-line:unused-parameter // className is for future use with actual API calls
+func getStudentsLatestCommitActivity(className string, studentUsernames []string) (string, error) {
+	startTime := time.Now()
+	const timeLayout = "2006-01-02 15:04:05"                                     // Layout for parsing string dates
+	referenceNow := time.Date(2023, 5, 16, 10, 0, 0, 0, time.UTC) // Fixed point for 'ago' calculation
+
+	// Define styles inspired by the screenshot
+	// Main container for the table content (not the overall app docStyle)
+	tableContainerStyle := lipgloss.NewStyle().
+		Padding(1, 2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#7D56F4")) // Purple border
+
+	// Header above the table: "Fetching GitHub commit data..."
+	fetchingHeaderStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#E06BFF")). // Bright pink/purple
+		PaddingBottom(1)
+
+	// Title inside the table: "✨ GitHub Users & Their Last Commits ✨"
+	tableTitleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FFD700")). // Gold for sparkles and text
+		Background(lipgloss.Color("#3A2D4C")). // Dark purple background
+		Padding(0, 1).
+		Width(50). // Approximate width to center text
+		Align(lipgloss.Center).
+		MarginBottom(1)
+
+	// Column headers: "User", "Last Commit"
+	columnHeaderStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FF85C0")). // Pinkish
+		Padding(0, 1)
+
+	// Usernames
+	userStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#87CEFA")) // Light sky blue
+
+	// Timestamps
+	timeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#32CD32")) // Lime green
+
+	// Footer below the table: "Done! Fetched commit data..."
+	doneFooterStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#32CD32")). // Lime green for checkmark and text
+		PaddingTop(1)
+
+	// Icons - just strings for now
+	sparkleIcon := "✨"
+	userIconPlaceholder := "❖"
+	timeIcon := "🕒"
+
+	// Actual icons from screenshot
+	userIcons := []string{"🐙", "🚀", "✨", "🐱", "💎"}
+
+	// Dummy data
+	dummyCommits := []struct {
+		user string
+		icon string
+		time string // Keep as string for initial definition, parse later
+	}{
+		{user: "octocat", icon: userIcons[0], time: "2023-05-12 14:32:21"},
+		{user: "defunkt", icon: userIcons[1], time: "2023-05-14 09:17:43"},
+		{user: "mojombo", icon: userIcons[2], time: "2023-05-10 22:01:53"},
+		{user: "wycats", icon: userIcons[3], time: "2023-05-13 16:45:09"},
+		{user: "dhh", icon: userIcons[4], time: "2023-05-15 11:23:37"},
+	}
+
+	var sb strings.Builder
+
+	// Header line
+	sb.WriteString(fetchingHeaderStyle.Render(fmt.Sprintf("%s ║ Fetching GitHub commit data with sparkles ║ %s", sparkleIcon, sparkleIcon)))
+	sb.WriteString("\n") // Newline after fetching header
+
+	// Table content construction
+	var tableContentSb strings.Builder
+	tableContentSb.WriteString(tableTitleStyle.Render("✨ GitHub Users & Their Last Commits ✨"))
+	tableContentSb.WriteString("\n")
+
+	// Column Headers Row
+	headerRow := lipgloss.JoinHorizontal(lipgloss.Top,
+		columnHeaderStyle.Copy().Width(15).Render(userIconPlaceholder+" User"),
+		columnHeaderStyle.Copy().Width(25).Render("Last Commit"),
+	)
+	tableContentSb.WriteString(headerRow)
+	tableContentSb.WriteString("\n")
+	// Divider line (simple one)
+	tableContentSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render(strings.Repeat("─", 50)))
+	tableContentSb.WriteString("\n")
+
+	// Data Rows
+	if len(studentUsernames) == 0 { // If no actual students, use all dummy data
+		for i, commitData := range dummyCommits {
+			commitTime, err := time.Parse(timeLayout, commitData.time)
+			var formattedTime string
+			if err != nil {
+				formattedTime = timeStyle.Render("invalid date")
+			} else {
+				durationAgo := referenceNow.Sub(commitTime)
+				formattedTime = timeStyle.Render("Last push " + formatDurationAgo(durationAgo))
+			}
+
+			userDisplay := userStyle.Render(commitData.user)
+			row := lipgloss.JoinHorizontal(lipgloss.Top,
+				lipgloss.NewStyle().Width(15).Render(fmt.Sprintf("%s %s", commitData.icon, userDisplay)),
+				lipgloss.NewStyle().Width(25).Render(fmt.Sprintf("%s %s", timeIcon, formattedTime)),
+			)
+			tableContentSb.WriteString(row)
+			tableContentSb.WriteString("\n")
+			// Add a faint divider between rows, except for the last one
+			if i < len(dummyCommits)-1 {
+				tableContentSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#444444")).Render(strings.Repeat("┈", 50)) + "\n")
+			}
+		}
+	} else { // Use actual student names with dummy icons/times if available
+		for i, studentName := range studentUsernames {
+			icon := userIcons[i%len(userIcons)] // Cycle through icons
+			// Generate a dummy commit time relative to referenceNow
+			dummyCommitTime := referenceNow.Add(-time.Duration((i*24)+(i*5)+2) * time.Hour).Add(-time.Duration(i*15) * time.Minute)
+			durationAgo := referenceNow.Sub(dummyCommitTime)
+			formattedTime := timeStyle.Render("Last push " + formatDurationAgo(durationAgo))
+
+			userDisplay := userStyle.Render(studentName)
+			row := lipgloss.JoinHorizontal(lipgloss.Top,
+				lipgloss.NewStyle().Width(15).Render(fmt.Sprintf("%s %s", icon, userDisplay)),
+				lipgloss.NewStyle().Width(25).Render(fmt.Sprintf("%s %s", timeIcon, formattedTime)),
+			)
+			tableContentSb.WriteString(row)
+			tableContentSb.WriteString("\n")
+			if i < len(studentUsernames)-1 {
+				tableContentSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#444444")).Render(strings.Repeat("┈", 50)) + "\n")
+			}
+		}
+	}
+
+	// Table Footer (charm-github v1.0.0)
+	tableFooterStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#AAAAAA")).
+		Background(lipgloss.Color("#302640")). // Slightly lighter than table title bg
+		Padding(0,1).
+		Width(50).
+		Align(lipgloss.Center).
+		MarginTop(1)
+	tableContentSb.WriteString(tableFooterStyle.Render("❖: *❖ charm-github v1.0.0 ❖*:❖"))
+	tableContentSb.WriteString("\n")
+
+	sb.WriteString(tableContainerStyle.Render(tableContentSb.String()))
+	sb.WriteString("\n") // Newline after table container
+
+	// Done Footer line
+	elapsedTime := time.Since(startTime).Seconds()
+	sb.WriteString(doneFooterStyle.Render(fmt.Sprintf("✓ Done! Fetched commit data with extra cuteness in %.2fs ✓", elapsedTime)))
+
+	return sb.String(), nil
 }

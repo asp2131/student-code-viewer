@@ -19,28 +19,27 @@
 | T-5 | Break main.go into multiple files | 🟢 |
 | T-6 | Create "Manage Students" submenu with Add/Delete/Back options | 🟢 |
 | T-7 | Create "Manage Repos" submenu with Clone/Pull/Clean/Back options | 🟢 |
-| T-8 | Create "View GH Activity" submenu with Week View/Check Activity/Back options | 🟡 |
-| T-9 | Implement Delete Class option with confirmation prompt | 🔵 |
-| T-10 | Add Back navigation option to return to previous menu | 🔵 |
+| T-8 | Create "View GH Activity" submenu with Week View/Check Activity/Back options | 🟢 |
+| T-9 | Implement Github Activity Check Activity functionality | 🔵 |
 
 ## Phase 3 – Enhance UI/UX
 | ID | Task | Status |
 |----|------|-------|
 | T-10 | Add visual indicators for current menu location (breadcrumb navigation) | 🔵 |
-| T-11 | Implement keyboard shortcuts for common actions | 🔵 |
-| T-12 | Add confirmation dialogs for destructive actions | 🔵 |
-| T-13 | Improve error handling and user feedback messages | 🔵 |
-| T-14 | Add help text/tooltips for menu options | 🔵 |
-| T-15 | Implement progressive disclosure (only show relevant options based on context) | 🔵 |
-| T-16 | Add visual feedback for long operations (loading indicators/progress bars) | 🔵 |
+| T-12 | Implement keyboard shortcuts for common actions | 🔵 |
+| T-13 | Add confirmation dialogs for destructive actions | 🔵 |
+| T-14 | Improve error handling and user feedback messages | 🔵 |
+| T-15 | Add help text/tooltips for menu options | 🔵 |
+| T-16 | Implement progressive disclosure (only show relevant options based on context) | 🔵 |
+| T-17 | Add visual feedback for long operations (loading indicators/progress bars) | 🔵 |
 
 ## Phase 4 – Testing & Refinement
 | ID | Task | Status |
 |----|------|-------|
-| T-17 | Test navigation flows between all menus and submenus | 🔵 |
-| T-18 | Verify all functionality works with new menu structure | 🔵 |
-| T-19 | Gather teacher feedback on new UI organization | 🔵 |
-| T-20 | Make refinements based on feedback | 🔵 |
+| T-18 | Test navigation flows between all menus and submenus | 🔵 |
+| T-19 | Verify all functionality works with new menu structure | 🔵 |
+| T-20 | Gather teacher feedback on new UI organization | 🔵 |
+| T-21 | Make refinements based on feedback | 🔵 |
 
 ## Technical Implementation Details
 

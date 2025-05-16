@@ -20,7 +20,7 @@
 | T-6 | Create "Manage Students" submenu with Add/Delete/Back options | 🟢 |
 | T-7 | Create "Manage Repos" submenu with Clone/Pull/Clean/Back options | 🟢 |
 | T-8 | Create "View GH Activity" submenu with Week View/Check Activity/Back options | 🟢 |
-| T-9 | Implement Github Activity Check Activity functionality | 🔵 |
+| T-9 | Implement Github Activity Check Activity functionality | 🟢 |
 
 ## Phase 3 – Enhance UI/UX
 | ID | Task | Status |

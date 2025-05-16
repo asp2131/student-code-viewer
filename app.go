@@ -1010,7 +1010,6 @@ func getStudentsLatestCommitActivity(className string, studentUsernames []string
 }
 
 // getStudentsCommitWeekViewActivity generates a styled weekly commit grid.
-//revive:disable-next-line:unused-parameter // className is for future use
 func getStudentsCommitWeekViewActivity(className string, studentUsernames []string) (string, error) {
 	startTime := time.Now()
 
@@ -1020,6 +1019,13 @@ func getStudentsCommitWeekViewActivity(className string, studentUsernames []stri
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#FFFFFF")).
 		Background(lipgloss.Color("#000000"))
+		
+	// Title style for the table
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FFFFFF")).
+		Background(lipgloss.Color("#000000")).
+		Align(lipgloss.Center)
 
 	// We're not using a fetching header in the minimalist design
 
@@ -1107,6 +1113,12 @@ func getStudentsCommitWeekViewActivity(className string, studentUsernames []stri
 	// --- Assembly ---
 	var sb strings.Builder
 
+	// Create title with class name
+	title := "GitHub Commit Activity - Last 5 Work Days"
+	if className != "" {
+		title = fmt.Sprintf("Class: %s - GitHub Commit Activity - Last 5 Work Days", className)
+	}
+
 	// Table header row
 	headerRow := strings.Builder{}
 	headerRow.WriteString(usernameHeaderStyle.Render("Username"))
@@ -1116,8 +1128,12 @@ func getStudentsCommitWeekViewActivity(className string, studentUsernames []stri
 		headerRow.WriteString(headerCellStyle.Render(dateStr))
 	}
 
-	// Table rows
-	rows := []string{headerRow.String()}
+	// Start building table rows with the title and header
+	rows := []string{
+		titleStyle.Render(title),
+		"", // Empty line after title
+		headerRow.String(),
+	}
 
 	// Add a row divider after the header
 	divider := strings.Repeat("─", usernameColWidth + (dateColWidth * len(workDates)) + len(workDates))

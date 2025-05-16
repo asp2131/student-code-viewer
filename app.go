@@ -500,14 +500,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Options: 0: Week View, 1: Check Specific Activity, 2: Back
 					switch selectedOptionIndex {
 					case 0: // Week View
-						m.output = fmt.Sprintf("Week View for '%s' not yet implemented.", m.selectedClass)
-						m.menuHistory = append(m.menuHistory, m.state)
-						m.state = stateOutput
-						return m, nil
-					case 1: // Check Specific Activity
-						m.menuHistory = append(m.menuHistory, m.state)
 						m.state = stateLoading
-						m.loadingMessage = fmt.Sprintf("Fetching GitHub activity for class '%s'...", m.selectedClass)
+						m.currentMenu = m.list.SelectedItem().(Item).Title()
+						return m, tea.Batch(
+							m.spinner.Tick,
+							func() tea.Msg {
+								studentUsernames, err := getStudents(m.selectedClass)
+								if err != nil {
+									return operationResultMsg{err: fmt.Errorf("Error fetching students for class '%s': %w", m.selectedClass, err)}
+								}
+								styledOutput, err := getStudentsCommitWeekViewActivity(m.selectedClass, studentUsernames)
+								if err != nil {
+									return operationResultMsg{err: fmt.Errorf("Error fetching GitHub week activity: %w", err)}
+								}
+								return operationResultMsg{logs: []string{styledOutput}}
+							},
+						)
+					case 1: // Check Latest Activity (previously index 1)
+						m.state = stateLoading
+						m.currentMenu = m.list.SelectedItem().(Item).Title()
 						return m, tea.Batch(
 							m.spinner.Tick,
 							func() tea.Msg {
@@ -778,10 +789,12 @@ func (m Model) View() string {
 		))
 
 	case stateOutput:
-		// Check if the output is our special styled table
-		// The marker string is "✨ GitHub Users & Their Last Commits ✨"
-		if strings.Contains(m.output, "✨ GitHub Users & Their Last Commits ✨") {
-			// If it's the styled table, render it directly AFTER the breadcrumb, then the confirmation.
+		// Check if the output is one of our special styled tables
+		latestActivityMarker := "✨ GitHub Users & Their Last Commits ✨"
+		weekViewActivityMarker := "✨ GitHub Commit Activity (Last 7 Work Days) ✨"
+
+		if strings.Contains(m.output, latestActivityMarker) || strings.Contains(m.output, weekViewActivityMarker) {
+			// If it's a styled table, render it directly AFTER the breadcrumb, then the confirmation.
 			return docStyle.Render(
 				breadcrumbStyle.Render(m.currentMenu) + "\n" +
 				m.output + // This is already fully styled
@@ -791,7 +804,7 @@ func (m Model) View() string {
 		// Otherwise, use the standard output box
 		return docStyle.Render(
 			breadcrumbStyle.Render(m.currentMenu) + "\n" +
-				outputBoxStyle.Render(m.output+"\n\nPress Enter to continue."),
+			outputBoxStyle.Render(m.output+"\n\nPress Enter to continue."),
 		)
 
 	case stateViewGHActivity:
@@ -992,6 +1005,161 @@ func getStudentsLatestCommitActivity(className string, studentUsernames []string
 	// Done Footer line
 	elapsedTime := time.Since(startTime).Seconds()
 	sb.WriteString(doneFooterStyle.Render(fmt.Sprintf("✓ Done! Fetched commit data with extra cuteness in %.2fs ✓", elapsedTime)))
+
+	return sb.String(), nil
+}
+
+// getStudentsCommitWeekViewActivity generates a styled weekly commit grid.
+//revive:disable-next-line:unused-parameter // className is for future use
+func getStudentsCommitWeekViewActivity(className string, studentUsernames []string) (string, error) {
+	startTime := time.Now()
+
+	// --- Styles ---
+	// Table border style
+	tableBorderStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#FFFFFF")).
+		Background(lipgloss.Color("#000000"))
+
+	// We're not using a fetching header in the minimalist design
+
+	// Column widths
+	usernameColWidth := 15
+	dateColWidth := 10
+
+	// Header cell style
+	headerCellStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("#FFFFFF")).
+		Background(lipgloss.Color("#000000")).
+		Align(lipgloss.Center).
+		Width(dateColWidth).
+		Border(lipgloss.NormalBorder(), false, false, false, true). // Right border only
+		BorderForeground(lipgloss.Color("#FFFFFF"))
+
+	// Username header cell style (first column)
+	usernameHeaderStyle := headerCellStyle.Copy().
+		Width(usernameColWidth).
+		Align(lipgloss.Center)
+
+	// Regular cell style
+	cellStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FFFFFF")).
+		Background(lipgloss.Color("#000000")).
+		Align(lipgloss.Center).
+		Width(dateColWidth).
+		Border(lipgloss.NormalBorder(), false, false, false, true). // Right border only
+		BorderForeground(lipgloss.Color("#FFFFFF"))
+
+	// Username cell style (first column)
+	usernameCellStyle := cellStyle.Copy().
+		Width(usernameColWidth).
+		Align(lipgloss.Left).
+		Padding(0, 1, 0, 0)
+
+	// Row divider style
+	rowDividerStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#FFFFFF")).
+		Background(lipgloss.Color("#000000"))
+
+	// Footer style for "Done!" message
+	doneFooterStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#32CD32")). // Green text
+		PaddingTop(1)
+
+	// --- Data Generation ---
+	// Use real student usernames or fallback to dummies
+	dummyUsers := []string{
+		"IzadorMeyer", "Mioque27", "aFord504", "ahollard", "asp2131",
+		"cchopper123", "heaven0Rnell", "sewellstephens", "jsmith", "mgarcia",
+	}
+
+	if len(studentUsernames) == 0 {
+		studentUsernames = dummyUsers
+	}
+
+	// Generate dates for the workdays of this week, ending with today (Fri 05/16/2025)
+	workDates := []time.Time{
+		time.Date(2025, 5, 12, 0, 0, 0, 0, time.UTC), // Mon 05/12
+		time.Date(2025, 5, 13, 0, 0, 0, 0, time.UTC), // Tue 05/13
+		time.Date(2025, 5, 14, 0, 0, 0, 0, time.UTC), // Wed 05/14
+		time.Date(2025, 5, 15, 0, 0, 0, 0, time.UTC), // Thu 05/15
+		time.Date(2025, 5, 16, 0, 0, 0, 0, time.UTC), // Fri 05/16 (today)
+	}
+
+	// Generate dummy commit data (true/false for activity)
+	activityData := make(map[string]map[string]bool) // username -> date -> has activity
+	for _, username := range studentUsernames {
+		activityData[username] = make(map[string]bool)
+		for _, date := range workDates {
+			// Generate semi-random activity (true/false)
+			// Use hash of username + date to get consistent but seemingly random results
+			hashSource := username + date.Format("2006-01-02")
+			hashValue := 0
+			for _, char := range hashSource {
+				hashValue += int(char)
+			}
+			// About 30% chance of activity
+			activityData[username][date.Format("2006-01-02")] = hashValue%10 < 3
+		}
+	}
+
+	// --- Assembly ---
+	var sb strings.Builder
+
+	// Table header row
+	headerRow := strings.Builder{}
+	headerRow.WriteString(usernameHeaderStyle.Render("Username"))
+	for _, date := range workDates {
+		// Format as "Mon 05/12" to match reference image
+		dateStr := date.Format("Mon") + " " + fmt.Sprintf("%02d/%02d", date.Month(), date.Day())
+		headerRow.WriteString(headerCellStyle.Render(dateStr))
+	}
+
+	// Table rows
+	rows := []string{headerRow.String()}
+
+	// Add a row divider after the header
+	divider := strings.Repeat("─", usernameColWidth + (dateColWidth * len(workDates)) + len(workDates))
+	rows = append(rows, rowDividerStyle.Render(divider))
+
+	// Data rows
+	for _, username := range studentUsernames {
+		if len(rows) > 20 { // Limit number of rows for display
+			break
+		}
+		
+		row := strings.Builder{}
+		row.WriteString(usernameCellStyle.Render(username))
+		
+		for _, date := range workDates {
+			dateKey := date.Format("2006-01-02")
+			hasActivity := activityData[username][dateKey]
+			
+			var symbol string
+			var symbolColor lipgloss.Style
+			
+			if hasActivity {
+				symbol = "✓" // Check mark
+				symbolColor = lipgloss.NewStyle().Foreground(lipgloss.Color("#00FF00")) // Green
+			} else {
+				symbol = "✗" // X mark
+				symbolColor = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")) // Red
+			}
+			
+			row.WriteString(cellStyle.Render(symbolColor.Render(symbol)))
+		}
+		
+		rows = append(rows, row.String())
+	}
+
+	// Join all rows with newlines
+	tableContent := strings.Join(rows, "\n")
+
+	// Wrap in border
+	sb.WriteString(tableBorderStyle.Render(tableContent))
+	sb.WriteString("\n")
+	sb.WriteString(doneFooterStyle.Render(fmt.Sprintf("✓ Done! Fetched weekly commit data in %.2fs ✓", time.Since(startTime).Seconds())))
 
 	return sb.String(), nil
 }

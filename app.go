@@ -854,8 +854,7 @@ func formatDurationAgo(d time.Duration) string {
 
 // getStudentsLatestCommitActivity fetches (dummy) GitHub activity for students in a class
 // and returns a fully styled string ready for display.
-//revive:disable-next-line:unused-parameter // className is for future use with actual API calls
-func getStudentsLatestCommitActivity(className string, studentUsernames []string) (string, error) {
+func getStudentsLatestCommitActivity(_ string, studentUsernames []string) (string, error) {
 	startTime := time.Now()
 	const timeLayout = "2006-01-02 15:04:05"                                     // Layout for parsing string dates
 	referenceNow := time.Date(2023, 5, 16, 10, 0, 0, 0, time.UTC) // Fixed point for 'ago' calculation

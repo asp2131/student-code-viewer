@@ -35,13 +35,13 @@ func cloneRepo(username, repoName, className string) (string, error) {
 		return "", fmt.Errorf("repository already exists at %s", studentDir)
 	}
 
-	cmd := exec.Command("git", "clone", repoURL, studentDir)
+	cmd := exec.Command("git", "clone", "-q", repoURL, studentDir)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to clone repository: %s: %w", output, err)
 	}
 
-	return fmt.Sprintf("Successfully cloned %s to %s", repoURL, studentDir), nil
+	return fmt.Sprintf("%s repo has been cloned successfully in %s", username, studentDir), nil
 }
 
 // pullRepo pulls the latest changes for a student's repository
@@ -61,13 +61,13 @@ func pullRepo(username, className string) (string, error) {
 	}
 
 	// Pull the latest changes
-	cmd := exec.Command("git", "-C", studentDir, "pull")
+	cmd := exec.Command("git", "-C", studentDir, "pull", "-q")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("failed to pull repository: %s: %w", output, err)
 	}
 
-	return fmt.Sprintf("Successfully pulled latest changes for %s", studentDir), nil
+	return fmt.Sprintf("Successfully pulled updates for %s repo in %s", username, studentDir), nil
 }
 
 // cleanRepo removes a student's repository

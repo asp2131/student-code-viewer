@@ -305,10 +305,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.list = createViewGHActivityMenu(m.selectedClass) // This function needs to be created
 					return m, nil
 				case 3: // Delete Class
-					// TODO: Implement Delete Class confirmation and logic
-					m.output = "Delete Class not yet implemented."
+					// Transition to delete confirmation state
 					m.menuHistory = append(m.menuHistory, m.state)
-					m.state = stateOutput
+					m.state = stateDeleteConfirmation
+					m.currentMenu = "Confirm Class Deletion: " + m.selectedClass
+					
+					// Initialize the menu items for delete confirmation
+					confirmItems := []list.Item{
+						Item{title: "Yes, delete class", description: "Permanently delete this class and all student data"},
+						Item{title: "No, cancel", description: "Return to class management menu"},
+					}
+					
+					// Configure the list for the confirmation menu
+					m.list.Title = "Confirm Deletion"
+					m.list.SetShowStatusBar(false)       // Hide the status bar
+					m.list.SetFilteringEnabled(false)    // No filtering needed
+					m.list.Styles.Title = titleStyle     // Use consistent styling
+					m.list.SetShowHelp(true)             // Show keyboard navigation help
+					m.list.SetShowPagination(false)      // No pagination for 2 items
+					m.list.SetItems(confirmItems)        // Set the menu items
+					m.list.Select(0)                     // Select the first item by default
 					return m, nil
 				case 4: // Back
 					if len(m.menuHistory) > 0 {
@@ -586,26 +602,101 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				// Handle the legacy code paths for other input scenarios if any (removed for this refactor)
-				i, _ := m.list.SelectedItem().(Item)
-
-				switch i.title {
-				case "Add Students": //This case might be legacy/unreachable after refactor.
-					m.menuHistory = append(m.menuHistory, m.state)
-					m.studentInput.Focus()
-					m.state = stateStudentInput
-					return m, nil
+				// Legacy code has been removed as part of refactoring
+			} else if m.state == stateDeleteConfirmation { // Handle class deletion confirmation
+				if msg.String() == "enter" {
+					// Get the currently selected item from the list
+					selected, ok := m.list.SelectedItem().(Item)
+					if !ok {
+						return m, nil
+					}
+					
+					// Check which option was selected
+					if selected.title == "Yes, delete class" {
+						// User confirmed deletion - delete the class and all students
+						err := deleteClassAndStudents(m.selectedClass)
+						if err != nil {
+							m.err = err
+							return m, nil
+						}
+						
+						// Return directly to class selection menu instead of showing output
+						m.state = stateClassSelection
+						m.currentMenu = "Select a Class"
+						
+						// Refresh class list in case it changed
+						classes, err := getClasses()
+						if err != nil {
+							m.err = err
+							return m, nil
+						}
+						m.classList = classes
+						
+						// Set up class selection menu
+						classItems := make([]list.Item, len(m.classList)+1) // +1 for Back option
+						for i, className := range m.classList {
+							classItems[i] = Item{title: className, description: "Select to manage this class"}
+						}
+						classItems[len(m.classList)] = Item{title: "Back", description: "Return to main menu"}
+						m.list.SetItems(classItems)
+						return m, nil
+						
+					} else if selected.title == "No, cancel" {
+						// User cancelled deletion - go back to class management menu
+						if len(m.menuHistory) > 0 {
+							lastIndex := len(m.menuHistory) - 1
+							m.state = m.menuHistory[lastIndex]
+							m.menuHistory = m.menuHistory[:lastIndex]
+							m.currentMenu = "Class Management: " + m.selectedClass
+							
+							// Reset the menu items for class management
+							manageItems := []list.Item{
+								Item{title: "Manage Students", description: "Add or remove students"},
+								Item{title: "Manage Repos", description: "Clone, pull, or clean repositories"},
+								Item{title: "View GH Activity", description: "Check student GitHub activity"},
+								Item{title: "Delete Class", description: "Delete this class and its data"},
+								Item{title: "Back", description: "Return to main menu"},
+							}
+							m.list.SetItems(manageItems)
+							m.selectedItem = 3 // Reset to the Delete Class option
+							return m, nil
+						}
+					}
+				} else if msg.String() == "esc" {
+					// Escape cancels and returns to previous menu
+					if len(m.menuHistory) > 0 {
+						lastIndex := len(m.menuHistory) - 1
+						m.state = m.menuHistory[lastIndex]
+						m.menuHistory = m.menuHistory[:lastIndex]
+						m.currentMenu = "Class Management: " + m.selectedClass
+						
+						// Reset the menu items for class management
+						manageItems := []list.Item{
+							Item{title: "Manage Students", description: "Add or remove students"},
+							Item{title: "Manage Repos", description: "Clone, pull, or clean repositories"},
+							Item{title: "View GH Activity", description: "Check student GitHub activity"},
+							Item{title: "Delete Class", description: "Delete this class and its data"},
+							Item{title: "Back", description: "Return to main menu"},
+						}
+						m.list.SetItems(manageItems)
+						m.selectedItem = 3 // Reset to the Delete Class option
+						return m, nil
+					}
 				}
+				// Let the list handle all other key presses (like arrow keys)
+				return m, nil
 			} else if m.state == stateStudentInput {
 				// Process student input
 				studentNames := strings.Fields(m.studentInput.Value())
 				if len(studentNames) == 0 {
-					m.output = "No student names entered."
-					m.menuHistory = append(m.menuHistory, m.state)
-					m.state = stateOutput
-					return m, nil
-				}
-
-				// Add students to the database
+					// No student names entered, go back to previous menu
+					if len(m.menuHistory) > 0 {
+						lastIndex := len(m.menuHistory) - 1
+						m.state = m.menuHistory[lastIndex]
+						m.menuHistory = m.menuHistory[:lastIndex]
+						return m, nil
+					}
+				}	// Add students to the database
 				for _, name := range studentNames {
 					err := addStudent(m.selectedClass, name)
 					if err != nil {
@@ -684,14 +775,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	// Handle text input updates only if an input field is focused
 	switch m.state {
-	case stateClassSelection, stateClassManagement, stateManageStudents, stateStudentSelectionForDelete, stateManageRepos:
+	case stateMainMenu, stateClassSelection, stateClassManagement, stateManageStudents, stateManageRepos, stateViewGHActivity, stateStudentSelectionForDelete, stateDeleteConfirmation:
 		m.list, cmd = m.list.Update(msg)
 	case stateClassInput:
 		m.classInput, cmd = m.classInput.Update(msg)
 	case stateStudentInput:
 		m.studentInput, cmd = m.studentInput.Update(msg)
-	case stateViewGHActivity:
-		m.list, cmd = m.list.Update(msg)
 	}
 
 	return m, cmd
@@ -777,6 +866,24 @@ func (m Model) View() string {
 				titleStyle.Render("Enter Student Usernames") + "\n" +
 				"(Space-separated list of GitHub usernames)\n\n" +
 				m.studentInput.View(),
+		)
+
+	case stateDeleteConfirmation:
+		// Create confirmation menu items
+		warningText := fmt.Sprintf(
+			"Are you sure you want to delete class '%s' and ALL associated student data?\n" +
+			"This action CANNOT be undone.",
+			m.selectedClass,
+		)
+		
+		// Set the list title to reflect the current operation
+		m.list.Title = "Confirm Deletion"
+		
+		// Render using the list's built-in View method
+		return docStyle.Render(
+			breadcrumbStyle.Render(m.currentMenu) + "\n\n" +
+			errorStyle.Render(warningText) + "\n\n" +
+			m.list.View(),
 		)
 
 	case stateLoading: // New view for loading state
@@ -1177,4 +1284,27 @@ func getStudentsCommitWeekViewActivity(className string, studentUsernames []stri
 	sb.WriteString(doneFooterStyle.Render(fmt.Sprintf("✓ Done! Fetched weekly commit data in %.2fs ✓", time.Since(startTime).Seconds())))
 
 	return sb.String(), nil
+}
+
+// deleteClassAndStudents deletes a class and all associated students.
+func deleteClassAndStudents(className string) error {
+	// Get all students in the class first
+	students, err := getStudents(className)
+	if err != nil {
+		return fmt.Errorf("failed to get students for class %s: %w", className, err)
+	}
+
+	// Delete each student from the class
+	for _, student := range students {
+		if err := deleteStudent(className, student); err != nil {
+			return fmt.Errorf("failed to delete student %s from class %s: %w", student, className, err)
+		}
+	}
+
+	// Now that all students are deleted, delete the class itself
+	if err := deleteClass(className); err != nil {
+		return fmt.Errorf("failed to delete class %s: %w", className, err)
+	}
+
+	return nil
 }

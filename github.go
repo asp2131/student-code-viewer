@@ -12,6 +12,26 @@ import (
 	"time"
 )
 
+// GithubEvent represents a GitHub event from the API
+type GithubEvent struct {
+	Type      string    `json:"type"`
+	CreatedAt time.Time `json:"created_at"`
+	Repo      struct {
+		Name string `json:"name"`
+	} `json:"repo"`
+}
+
+// GithubCommit represents a commit from the GitHub API
+type GithubCommit struct {
+	SHA    string `json:"sha"`
+	Commit struct {
+		Author struct {
+			Date time.Time `json:"date"`
+		} `json:"author"`
+		Message string `json:"message"`
+	} `json:"commit"`
+}
+
 // cloneRepo clones a GitHub repository for a student
 func cloneRepo(username, repoName, className string) (string, error) {
 	// Get user's home directory
@@ -166,4 +186,82 @@ func formatActivityReport(username string, events []GithubEvent) string {
 	}
 
 	return sb.String()
+}
+
+// getLatestCommitForRepo fetches the latest commit for a specific repository
+func getLatestCommitForRepo(username, repoName string) (*GithubCommit, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/commits?per_page=1", username, repoName)
+	
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch commits for %s/%s: %w", username, repoName, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return nil, fmt.Errorf("repository %s/%s not found", username, repoName)
+	}
+	
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned status %d for %s/%s", resp.StatusCode, username, repoName)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var commits []GithubCommit
+	if err := json.Unmarshal(body, &commits); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal commits: %w", err)
+	}
+
+	if len(commits) == 0 {
+		return nil, fmt.Errorf("no commits found for %s/%s", username, repoName)
+	}
+
+	return &commits[0], nil
+}
+
+// getCommitsInDateRange fetches commits for a repository within a date range
+func getCommitsInDateRange(username, repoName string, since, until time.Time) ([]GithubCommit, error) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/commits?since=%s&until=%s&per_page=100", 
+		username, repoName, since.Format(time.RFC3339), until.Format(time.RFC3339))
+	
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch commits for %s/%s: %w", username, repoName, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return nil, fmt.Errorf("repository %s/%s not found", username, repoName)
+	}
+	
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("GitHub API returned status %d for %s/%s", resp.StatusCode, username, repoName)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	var commits []GithubCommit
+	if err := json.Unmarshal(body, &commits); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal commits: %w", err)
+	}
+
+	return commits, nil
+}
+
+// checkRepoExists checks if a repository exists for a user
+func checkRepoExists(username, repoName string) bool {
+	url := fmt.Sprintf("https://api.github.com/repos/%s/%s", username, repoName)
+	resp, err := http.Get(url)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }

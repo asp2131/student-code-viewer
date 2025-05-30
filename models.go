@@ -1,8 +1,6 @@
 package main
 
 import (
-	"time"
-
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
@@ -12,15 +10,6 @@ import (
 type Item struct {
 	title       string
 	description string
-}
-
-// GithubEvent represents a GitHub event from the API
-type GithubEvent struct {
-	Type      string    `json:"type"`
-	CreatedAt time.Time `json:"created_at"`
-	Repo      struct {
-		Name string `json:"name"`
-	} `json:"repo"`
 }
 
 // Model represents the state of the application.

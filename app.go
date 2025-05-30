@@ -978,10 +978,8 @@ func formatDurationAgo(d time.Duration) string {
 	return "just now"
 }
 
-func getStudentsLatestCommitActivity(_ string, studentUsernames []string) (string, error) {
+func getStudentsLatestCommitActivity(className string, studentUsernames []string) (string, error) {
 	startTime := time.Now()
-	const timeLayout = "2006-01-02 15:04:05"                                     // Layout for parsing string dates
-	referenceNow := time.Date(2023, 5, 16, 10, 0, 0, 0, time.UTC) // Fixed point for 'ago' calculation
 
 	// Define styles inspired by the screenshot
 	// Main container for the table content (not the overall app docStyle)
@@ -1018,6 +1016,9 @@ func getStudentsLatestCommitActivity(_ string, studentUsernames []string) (strin
 	// Timestamps
 	timeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#32CD32")) // Lime green
 
+	// Error style
+	errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B")) // Red
+
 	// Footer below the table: "Done! Fetched commit data..."
 	doneFooterStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#32CD32")). // Lime green for checkmark and text
@@ -1030,19 +1031,6 @@ func getStudentsLatestCommitActivity(_ string, studentUsernames []string) (strin
 
 	// Actual icons from screenshot
 	userIcons := []string{"🐙", "🚀", "✨", "🐱", "💎"}
-
-	// Dummy data
-	dummyCommits := []struct {
-		user string
-		icon string
-		time string // Keep as string for initial definition, parse later
-	}{
-		{user: "octocat", icon: userIcons[0], time: "2023-05-12 14:32:21"},
-		{user: "defunkt", icon: userIcons[1], time: "2023-05-14 09:17:43"},
-		{user: "mojombo", icon: userIcons[2], time: "2023-05-10 22:01:53"},
-		{user: "wycats", icon: userIcons[3], time: "2023-05-13 16:45:09"},
-		{user: "dhh", icon: userIcons[4], time: "2023-05-15 11:23:37"},
-	}
 
 	var sb strings.Builder
 
@@ -1066,37 +1054,27 @@ func getStudentsLatestCommitActivity(_ string, studentUsernames []string) (strin
 	tableContentSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render(strings.Repeat("─", 50)))
 	tableContentSb.WriteString("\n")
 
-	// Data Rows
-	if len(studentUsernames) == 0 { // If no actual students, use all dummy data
-		for i, commitData := range dummyCommits {
-			commitTime, err := time.Parse(timeLayout, commitData.time)
-			var formattedTime string
-			if err != nil {
-				formattedTime = timeStyle.Render("invalid date")
-			} else {
-				durationAgo := referenceNow.Sub(commitTime)
-				formattedTime = timeStyle.Render("Last push " + formatDurationAgo(durationAgo))
-			}
-
-			userDisplay := userStyle.Render(commitData.user)
-			row := lipgloss.JoinHorizontal(lipgloss.Top,
-				lipgloss.NewStyle().Width(15).Render(fmt.Sprintf("%s %s", commitData.icon, userDisplay)),
-				lipgloss.NewStyle().Width(25).Render(fmt.Sprintf("%s %s", timeIcon, formattedTime)),
-			)
-			tableContentSb.WriteString(row)
-			tableContentSb.WriteString("\n")
-			// Add a faint divider between rows, except for the last one
-			if i < len(dummyCommits)-1 {
-				tableContentSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#444444")).Render(strings.Repeat("┈", 50)) + "\n")
-			}
-		}
-	} else { // Use actual student names with dummy icons/times if available
+	// Data Rows - Fetch real GitHub data
+	if len(studentUsernames) == 0 {
+		tableContentSb.WriteString(errorStyle.Render("No students found in class"))
+		tableContentSb.WriteString("\n")
+	} else {
 		for i, studentName := range studentUsernames {
 			icon := userIcons[i%len(userIcons)] // Cycle through icons
-			// Generate a dummy commit time relative to referenceNow
-			dummyCommitTime := referenceNow.Add(-time.Duration((i*24)+(i*5)+2) * time.Hour).Add(-time.Duration(i*15) * time.Minute)
-			durationAgo := referenceNow.Sub(dummyCommitTime)
-			formattedTime := timeStyle.Render("Last push " + formatDurationAgo(durationAgo))
+			
+			// Try to fetch real commit data from .github.io repository
+			repoName := studentName + ".github.io"
+			latestCommit, err := getLatestCommitForRepo(studentName, repoName)
+			
+			var formattedTime string
+			if err != nil {
+				// If .github.io repo doesn't exist or has no commits, show error
+				formattedTime = errorStyle.Render("No .github.io repo")
+			} else {
+				// Calculate time ago from the actual commit date
+				durationAgo := time.Now().Sub(latestCommit.Commit.Author.Date)
+				formattedTime = timeStyle.Render("Last push " + formatDurationAgo(durationAgo))
+			}
 
 			userDisplay := userStyle.Render(studentName)
 			row := lipgloss.JoinHorizontal(lipgloss.Top,
@@ -1196,16 +1174,11 @@ func getStudentsCommitWeekViewActivity(className string, studentUsernames []stri
 		PaddingTop(1)
 
 	// --- Data Generation ---
-	// Use real student usernames or fallback to dummies
-	dummyUsers := []string{
-		"IzadorMeyer", "Mioque27", "aFord504", "ahollard", "asp2131",
-		"cchopper123", "heaven0Rnell", "sewellstephens", "jsmith", "mgarcia",
-	}
-
+	// Use real student usernames or fallback to empty if none provided
 	if len(studentUsernames) == 0 {
-		studentUsernames = dummyUsers
+		studentUsernames = []string{} // No dummy data, show empty state
 	}
-
+	
 	// Generate dates for the last 5 workdays
 	now := time.Now()
 	workDates := []time.Time{}
@@ -1223,20 +1196,38 @@ func getStudentsCommitWeekViewActivity(className string, studentUsernames []stri
 		workDates[i], workDates[j] = workDates[j], workDates[i]
 	}
 
-	// Generate dummy commit data (true/false for activity)
+	// Fetch real commit data from GitHub
 	activityData := make(map[string]map[string]bool) // username -> date -> has activity
+	
 	for _, username := range studentUsernames {
 		activityData[username] = make(map[string]bool)
-		for _, date := range workDates {
-			// Generate semi-random activity (true/false)
-			// Use hash of username + date to get consistent but seemingly random results
-			hashSource := username + date.Format("2006-01-02")
-			hashValue := 0
-			for _, char := range hashSource {
-				hashValue += int(char)
+		repoName := username + ".github.io"
+		
+		// Get the date range for the week (start of first day to end of last day)
+		since := workDates[0].Truncate(24 * time.Hour)
+		until := workDates[len(workDates)-1].Add(24 * time.Hour).Truncate(24 * time.Hour)
+		
+		// Fetch commits for this date range
+		commits, err := getCommitsInDateRange(username, repoName, since, until)
+		if err != nil {
+			// If repo doesn't exist or API fails, mark all days as false
+			for _, date := range workDates {
+				activityData[username][date.Format("2006-01-02")] = false
 			}
-			// About 30% chance of activity
-			activityData[username][date.Format("2006-01-02")] = hashValue%10 < 3
+			continue
+		}
+		
+		// Create a set of dates that have commits
+		commitDates := make(map[string]bool)
+		for _, commit := range commits {
+			commitDate := commit.Commit.Author.Date.Format("2006-01-02")
+			commitDates[commitDate] = true
+		}
+		
+		// Mark activity for each work day
+		for _, date := range workDates {
+			dateKey := date.Format("2006-01-02")
+			activityData[username][dateKey] = commitDates[dateKey]
 		}
 	}
 

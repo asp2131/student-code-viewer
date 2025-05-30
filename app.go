@@ -56,6 +56,7 @@ func initialModel() Model {
 		classList:     []string{},
 		selectedClass: "",
 		currentMenu:   "Main Menu",
+		breadcrumbPath: []string{"Home"},
 		menuItems:     menuItems,
 		studentList:   []string{}, // Initialize studentList
 		selectedItem:  0,
@@ -152,6 +153,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectedItem--
 				}
 				return m, nil
+			} else if m.state == stateViewGHActivity { // Added for GitHub Activity menu
+				// Move selection up
+				if m.selectedItem > 0 {
+					m.selectedItem--
+				}
+				return m, nil
 			}
 
 		case "down", "j":
@@ -197,6 +204,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Move selection down (4 items total)
 				// Items: "Clone All Repos", "Pull All Repos", "Clean All Repos", "Back"
 				if m.selectedItem < 3 { // 0, 1, 2, 3 are valid indices
+					m.selectedItem++
+				}
+				return m, nil
+			} else if m.state == stateViewGHActivity { // Added for GitHub Activity menu
+				// Move selection down
+				if m.selectedItem < 2 { // 0, 1, 2 are valid indices
 					m.selectedItem++
 				}
 				return m, nil
@@ -300,9 +313,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.currentMenu = fmt.Sprintf("GitHub Activity for Class: %s", m.selectedClass)
 					m.menuHistory = append(m.menuHistory, m.state)
 					m.state = stateViewGHActivity
-					// Placeholder: create the actual menu for ViewGHActivity later
-					// For now, just set items or it will panic if list is empty on view
-					m.list = createViewGHActivityMenu(m.selectedClass) // This function needs to be created
+					m.selectedItem = 0 // Initialize to first menu item
 					return m, nil
 				case 3: // Delete Class
 					// Transition to delete confirmation state
@@ -511,13 +522,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			} else if m.state == stateViewGHActivity {
 				if msg.String() == "enter" {
-					selectedOptionIndex := m.list.Index()
+					selectedOptionIndex := m.selectedItem
 
 					// Options: 0: Week View, 1: Check Specific Activity, 2: Back
 					switch selectedOptionIndex {
 					case 0: // Week View
 						m.state = stateLoading
-						m.currentMenu = m.list.SelectedItem().(Item).Title()
+						m.currentMenu = "Week View"
 						return m, tea.Batch(
 							m.spinner.Tick,
 							func() tea.Msg {
@@ -534,7 +545,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						)
 					case 1: // Check Latest Activity (previously index 1)
 						m.state = stateLoading
-						m.currentMenu = m.list.SelectedItem().(Item).Title()
+						m.currentMenu = "Check Latest Activity"
 						return m, tea.Batch(
 							m.spinner.Tick,
 							func() tea.Msg {
@@ -775,7 +786,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	// Handle text input updates only if an input field is focused
 	switch m.state {
-	case stateMainMenu, stateClassSelection, stateClassManagement, stateManageStudents, stateManageRepos, stateViewGHActivity, stateStudentSelectionForDelete, stateDeleteConfirmation:
+	case stateMainMenu, stateClassSelection, stateClassManagement, stateManageStudents, stateManageRepos, stateStudentSelectionForDelete, stateDeleteConfirmation:
 		m.list, cmd = m.list.Update(msg)
 	case stateClassInput:
 		m.classInput, cmd = m.classInput.Update(msg)
@@ -794,13 +805,16 @@ func (m Model) View() string {
 		return docStyle.Render(errorMsg + "\n\nPress any key to continue.")
 	}
 
+	// Update breadcrumb path based on current state
+	breadcrumbPath := getBreadcrumbPath(m, m.currentMenu)
+	
 	// Create breadcrumb navigation
-	breadcrumb := breadcrumbStyle.Render(m.currentMenu)
+	breadcrumb := buildBreadcrumb(breadcrumbPath)
 
 	switch m.state {
 	case stateMainMenu:
 		// Use our new simple menu display with the selected item highlighted
-		return docStyle.Render(createSimpleMenuWithSelection("Student Code Viewer", m.menuItems, m.selectedItem))
+		return docStyle.Render(breadcrumb + "\n\n" + createSimpleMenuWithSelection("Student Code Viewer", m.menuItems, m.selectedItem))
 
 	case stateClassSelection:
 		// Convert class list to menu items and add a Back option
@@ -810,7 +824,7 @@ func (m Model) View() string {
 		}
 		// Add Back option as the last item
 		classItems[len(m.classList)] = Item{title: "Back", description: "Return to main menu"}
-		return docStyle.Render(createSimpleMenuWithSelection("Select a Class", classItems, m.selectedItem))
+		return docStyle.Render(breadcrumb + "\n\n" + createSimpleMenuWithSelection("Select a Class", classItems, m.selectedItem))
 
 	case stateClassManagement:
 		// Create class management menu items
@@ -821,7 +835,7 @@ func (m Model) View() string {
 			{title: "Delete Class", description: "Delete this class and its data"},
 			{title: "Back", description: "Return to main menu"},
 		}
-		return docStyle.Render(createSimpleMenuWithSelection("Managing Class: "+m.selectedClass, manageItems, m.selectedItem))
+		return docStyle.Render(breadcrumb + "\n\n" + createSimpleMenuWithSelection("Managing Class: "+m.selectedClass, manageItems, m.selectedItem))
 
 	case stateManageStudents:
 		// Create manage students menu items
@@ -830,7 +844,7 @@ func (m Model) View() string {
 			{title: "Delete Student", description: "Remove a student from this class"},
 			{title: "Back", description: "Return to class management menu"},
 		}
-		return docStyle.Render(createSimpleMenuWithSelection("Manage Students: "+m.selectedClass, studentManageItems, m.selectedItem))
+		return docStyle.Render(breadcrumb + "\n\n" + createSimpleMenuWithSelection("Manage Students: "+m.selectedClass, studentManageItems, m.selectedItem))
 
 	case stateStudentSelectionForDelete:
 		// Convert student list to menu items and add a Back option
@@ -840,7 +854,7 @@ func (m Model) View() string {
 		}
 		// Add Back option as the last item
 		studentDeleteItems[len(m.studentList)] = Item{title: "Back", description: "Return to manage students menu"}
-		return docStyle.Render(createSimpleMenuWithSelection("Delete Student from: "+m.selectedClass, studentDeleteItems, m.selectedItem))
+		return docStyle.Render(breadcrumb + "\n\n" + createSimpleMenuWithSelection("Delete Student from: "+m.selectedClass, studentDeleteItems, m.selectedItem))
 
 	case stateManageRepos:
 		// Create manage repositories menu items
@@ -850,11 +864,11 @@ func (m Model) View() string {
 			{title: "Clean All Repos", description: "Remove all cloned repositories for this class"},
 			{title: "Back", description: "Return to class management menu"},
 		}
-		return docStyle.Render(createSimpleMenuWithSelection("Manage Repositories: "+m.selectedClass, repoManageItems, m.selectedItem))
+		return docStyle.Render(breadcrumb + "\n\n" + createSimpleMenuWithSelection("Manage Repositories: "+m.selectedClass, repoManageItems, m.selectedItem))
 
 	case stateClassInput:
 		return docStyle.Render(
-			breadcrumb + "\n" +
+			breadcrumb + "\n\n" +
 				titleStyle.Render("Enter Class Name") + "\n\n" +
 				m.classInput.View() + "\n\n" +
 				helpStyle.Render("Press Enter to confirm or Esc to cancel"),
@@ -862,7 +876,7 @@ func (m Model) View() string {
 
 	case stateStudentInput:
 		return docStyle.Render(
-			breadcrumb + "\n" +
+			breadcrumb + "\n\n" +
 				titleStyle.Render("Enter Student Usernames") + "\n" +
 				"(Space-separated list of GitHub usernames)\n\n" +
 				m.studentInput.View(),
@@ -881,13 +895,12 @@ func (m Model) View() string {
 		
 		// Render using the list's built-in View method
 		return docStyle.Render(
-			breadcrumbStyle.Render(m.currentMenu) + "\n\n" +
+			breadcrumb + "\n\n" +
 			errorStyle.Render(warningText) + "\n\n" +
 			m.list.View(),
 		)
 
 	case stateLoading: // New view for loading state
-		breadcrumb := breadcrumbStyle.Render(m.currentMenu)
 		return docStyle.Render(fmt.Sprintf("%s\n\n%s %s\n\n%s",
 			breadcrumb,
 			m.spinner.View(),
@@ -901,30 +914,36 @@ func (m Model) View() string {
 		weekViewActivityMarker := "✨ GitHub Commit Activity (Last 7 Work Days) ✨"
 
 		if strings.Contains(m.output, latestActivityMarker) || strings.Contains(m.output, weekViewActivityMarker) {
-			// If it's a styled table, render it directly AFTER the breadcrumb, then the confirmation.
+			// For styled tables, display them directly without additional formatting
 			return docStyle.Render(
-				breadcrumbStyle.Render(m.currentMenu) + "\n" +
-				m.output + // This is already fully styled
-				"\n\n" + helpStyle.Render("Press Enter to continue."),
+				breadcrumb + "\n" +
+				m.output + "\n" +
+				helpStyle.Render("Press Enter to continue."),
+			)
+		} else {
+			// For regular output, apply our styling
+			return docStyle.Render(
+				breadcrumb + "\n" +
+				titleStyle.Render("Output") + "\n\n" +
+				m.output + "\n\n" +
+				helpStyle.Render("Press Enter to continue."),
 			)
 		}
-		// Otherwise, use the standard output box
-		return docStyle.Render(
-			breadcrumbStyle.Render(m.currentMenu) + "\n" +
-			outputBoxStyle.Render(m.output+"\n\nPress Enter to continue."),
-		)
 
 	case stateViewGHActivity:
-		// m.list is populated by createViewGHActivityMenu and contains the correct items and title.
-		// m.list.Update(msg) in the Update function handles navigation (k/j, up/down).
-		return docStyle.Render(m.list.View())
+		// Create GitHub activity menu items
+		ghActivityItems := []Item{
+			{title: "Week View", description: "View student activity for the past week"},
+			{title: "Check Latest Activity", description: "Display the latest commit time for each student"},
+			{title: "Back", description: "Return to class management menu"},
+		}
+		return docStyle.Render(breadcrumb + "\n\n" + createSimpleMenuWithSelection("GitHub Activity for Class: "+m.selectedClass, ghActivityItems, m.selectedItem))
 
 	default:
-		return "Loading..."
+		return docStyle.Render(breadcrumb + "\n\nUnknown state")
 	}
 }
 
-// formatDurationAgo converts a time.Duration into a string like "Xd Yh ago" or "Ym ago".
 func formatDurationAgo(d time.Duration) string {
 	days := int(d.Hours() / 24)
 	hours := int(math.Mod(d.Hours(), 24))
@@ -959,8 +978,6 @@ func formatDurationAgo(d time.Duration) string {
 	return "just now"
 }
 
-// getStudentsLatestCommitActivity fetches (dummy) GitHub activity for students in a class
-// and returns a fully styled string ready for display.
 func getStudentsLatestCommitActivity(_ string, studentUsernames []string) (string, error) {
 	startTime := time.Now()
 	const timeLayout = "2006-01-02 15:04:05"                                     // Layout for parsing string dates
@@ -1115,7 +1132,6 @@ func getStudentsLatestCommitActivity(_ string, studentUsernames []string) (strin
 	return sb.String(), nil
 }
 
-// getStudentsCommitWeekViewActivity generates a styled weekly commit grid.
 func getStudentsCommitWeekViewActivity(className string, studentUsernames []string) (string, error) {
 	startTime := time.Now()
 
@@ -1190,13 +1206,21 @@ func getStudentsCommitWeekViewActivity(className string, studentUsernames []stri
 		studentUsernames = dummyUsers
 	}
 
-	// Generate dates for the workdays of this week, ending with today (Fri 05/16/2025)
-	workDates := []time.Time{
-		time.Date(2025, 5, 12, 0, 0, 0, 0, time.UTC), // Mon 05/12
-		time.Date(2025, 5, 13, 0, 0, 0, 0, time.UTC), // Tue 05/13
-		time.Date(2025, 5, 14, 0, 0, 0, 0, time.UTC), // Wed 05/14
-		time.Date(2025, 5, 15, 0, 0, 0, 0, time.UTC), // Thu 05/15
-		time.Date(2025, 5, 16, 0, 0, 0, 0, time.UTC), // Fri 05/16 (today)
+	// Generate dates for the last 5 workdays
+	now := time.Now()
+	workDates := []time.Time{}
+	daysBack := 0
+	for len(workDates) < 5 {
+		workDate := now.AddDate(0, 0, -daysBack)
+		if workDate.Weekday() != time.Saturday && workDate.Weekday() != time.Sunday {
+			workDates = append(workDates, workDate)
+		}
+		daysBack++
+	}
+
+	// Reverse the workDates slice to get the dates in chronological order
+	for i, j := 0, len(workDates)-1; i < j; i, j = i+1, j-1 {
+		workDates[i], workDates[j] = workDates[j], workDates[i]
 	}
 
 	// Generate dummy commit data (true/false for activity)
@@ -1286,7 +1310,6 @@ func getStudentsCommitWeekViewActivity(className string, studentUsernames []stri
 	return sb.String(), nil
 }
 
-// deleteClassAndStudents deletes a class and all associated students.
 func deleteClassAndStudents(className string) error {
 	// Get all students in the class first
 	students, err := getStudents(className)

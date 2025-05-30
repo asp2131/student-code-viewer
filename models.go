@@ -42,6 +42,7 @@ type Model struct {
 	menuItems    []Item
 	selectedItem int    // Index of the currently selected item in simple menus
 	currentMenu  string // Title of the current menu for breadcrumb navigation
+	breadcrumbPath []string // Full navigation path for enhanced breadcrumb display
 
 	// Data for specific states/operations
 	studentList []string // List of students for selection (e.g., for deletion)

@@ -23,9 +23,13 @@ var (
 		BorderForeground(lipgloss.Color("#FF75B5"))
 
 	breadcrumbStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#AAAAAA")).
+		Foreground(lipgloss.Color("#66CCCC")).
+		Background(lipgloss.Color("#333333")).
 		MarginLeft(2).
-		MarginBottom(1)
+		MarginBottom(1).
+		Padding(0, 1).
+		Border(lipgloss.NormalBorder(), true).
+		BorderForeground(lipgloss.Color("#66CCCC"))
 
 	successStyle = lipgloss.NewStyle().
 		Bold(true).
@@ -99,6 +103,21 @@ func createSimpleMenuWithSelection(title string, options []Item, selectedIndex i
 	return sb.String()
 }
 
+// buildBreadcrumb creates a formatted breadcrumb navigation string from a path
+func buildBreadcrumb(path []string) string {
+	if len(path) == 0 {
+		return ""
+	}
+	
+	// Join path elements with " > " separator
+	breadcrumbText := strings.Join(path, " > ")
+	
+	// Add navigation icon at the beginning
+	breadcrumbText = "📍 " + breadcrumbText
+	
+	return breadcrumbStyle.Render(breadcrumbText)
+}
+
 // createClassSelectionMenu creates a menu for selecting classes
 func createClassSelectionMenu(classes []string) list.Model {
 	items := make([]list.Item, len(classes))
@@ -155,4 +174,47 @@ func createViewGHActivityMenu(className string) list.Model {
 	l.Styles.HelpStyle = helpStyle
 
 	return l
+}
+
+// getBreadcrumbPath returns the breadcrumb path based on the current menu state
+func getBreadcrumbPath(m Model, menuName string) []string {
+	switch m.state {
+	case stateMainMenu:
+		return []string{"Home"}
+	case stateClassSelection:
+		return []string{"Home", "Select Class"}
+	case stateClassManagement:
+		return []string{"Home", "Select Class", m.selectedClass}
+	case stateManageStudents:
+		return []string{"Home", "Select Class", m.selectedClass, "Manage Students"}
+	case stateManageRepos:
+		return []string{"Home", "Select Class", m.selectedClass, "Manage Repos"}
+	case stateViewGHActivity:
+		return []string{"Home", "Select Class", m.selectedClass, "GitHub Activity"}
+	case stateClassInput:
+		if strings.Contains(menuName, "Create Class") {
+			return []string{"Home", "Create Class"}
+		} else if strings.Contains(menuName, "Add Students") {
+			return []string{"Home", "Select Class", m.selectedClass, "Manage Students", "Add Students"}
+		}
+		return []string{"Home", "Create Class"}
+	case stateStudentInput:
+		return []string{"Home", "Select Class", m.selectedClass, "Manage Students", "Add Students"}
+	case stateStudentSelectionForDelete:
+		return []string{"Home", "Select Class", m.selectedClass, "Manage Students", "Delete Student"}
+	case stateDeleteConfirmation:
+		return []string{"Home", "Select Class", m.selectedClass, "Delete Class"}
+	case stateOutput:
+		// Keep the previous breadcrumb path for output states
+		if len(m.breadcrumbPath) > 0 {
+			return m.breadcrumbPath
+		}
+		return []string{"Home", "Output"}
+	default:
+		// Fallback to current menu name
+		if menuName != "" {
+			return []string{"Home", menuName}
+		}
+		return []string{"Home"}
+	}
 }

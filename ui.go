@@ -23,13 +23,10 @@ var (
 		BorderForeground(lipgloss.Color("#FF75B5"))
 
 	breadcrumbStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#66CCCC")).
-		Background(lipgloss.Color("#333333")).
+		Foreground(lipgloss.Color("#888888")).
 		MarginLeft(2).
 		MarginBottom(1).
-		Padding(0, 1).
-		Border(lipgloss.NormalBorder(), true).
-		BorderForeground(lipgloss.Color("#66CCCC"))
+		Padding(0, 1)
 
 	successStyle = lipgloss.NewStyle().
 		Bold(true).

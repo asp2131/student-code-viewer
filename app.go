@@ -1013,8 +1013,11 @@ func getStudentsLatestCommitActivity(className string, studentUsernames []string
 	// Usernames
 	userStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#87CEFA")) // Light sky blue
 
-	// Timestamps
-	timeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#32CD32")) // Lime green
+	// Timestamp styles based on commit age
+	recentTimeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#32CD32"))   // Lime green (< 7 days)
+	moderateTimeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFD700")) // Gold/yellow (7-30 days)
+	oldTimeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FFA500"))      // Orange (30-90 days)
+	veryOldTimeStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B"))  // Red (> 90 days)
 
 	// Error style
 	errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF6B6B")) // Red
@@ -1073,7 +1076,22 @@ func getStudentsLatestCommitActivity(className string, studentUsernames []string
 			} else {
 				// Calculate time ago from the actual commit date
 				durationAgo := time.Now().Sub(latestCommit.Commit.Author.Date)
-				formattedTime = timeStyle.Render("Last push " + formatDurationAgo(durationAgo))
+				timeAgoText := "Last push " + formatDurationAgo(durationAgo)
+				
+				// Choose color based on commit age
+				var timeStyle lipgloss.Style
+				days := durationAgo.Hours() / 24
+				if days < 7 {
+					timeStyle = recentTimeStyle
+				} else if days < 30 {
+					timeStyle = moderateTimeStyle
+				} else if days < 90 {
+					timeStyle = oldTimeStyle
+				} else {
+					timeStyle = veryOldTimeStyle
+				}
+				
+				formattedTime = timeStyle.Render(timeAgoText)
 			}
 
 			userDisplay := userStyle.Render(studentName)

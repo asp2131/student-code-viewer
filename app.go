@@ -14,8 +14,16 @@ import (
 )
 
 func initialModel() Model {
+	// Default terminal size (will be updated on first WindowSizeMsg)
+	defaultWidth := 80
+	defaultHeight := 24
+	
+	// Create terminal size info and get layout config
+	termSize := NewTerminalSizeInfo(defaultWidth, defaultHeight)
+	layout := GetLayoutConfig(termSize)
+	
 	// Initialize list component
-	l := list.New([]list.Item{}, list.NewDefaultDelegate(), 40, 12)
+	l := list.New([]list.Item{}, list.NewDefaultDelegate(), layout.ListWidth, layout.ListHeight)
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
 	l.Styles.Title = titleStyle
@@ -27,13 +35,13 @@ func initialModel() Model {
 	classInput.Placeholder = "Enter class name"
 	classInput.Focus()
 	classInput.CharLimit = 50
-	classInput.Width = 40
+	classInput.Width = layout.InputWidth
 
 	studentInput := textinput.New()
 	studentInput.Placeholder = "Enter student GitHub username(s), comma-separated"
 	studentInput.Focus()
 	studentInput.CharLimit = 200
-	studentInput.Width = 40
+	studentInput.Width = layout.InputWidth
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot
@@ -61,6 +69,7 @@ func initialModel() Model {
 		studentList:   []string{}, // Initialize studentList
 		selectedItem:  0,
 		spinner:       s, // Initialize spinner
+		terminalSize: termSize,
 	}
 }
 
@@ -81,6 +90,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// We'll handle list updates at the end of the function to ensure key presses are processed
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		// Update terminal size info and get new layout config
+		m.terminalSize = NewTerminalSizeInfo(msg.Width, msg.Height)
+		layout := GetLayoutConfig(m.terminalSize)
+		
+		// Update list dimensions
+		m.list.SetSize(layout.ListWidth, layout.ListHeight)
+		
+		// Update input field widths
+		m.classInput.Width = layout.InputWidth
+		m.studentInput.Width = layout.InputWidth
+		
+		return m, nil
+		
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q":
@@ -243,7 +266,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.menuHistory = append(m.menuHistory, m.state)
 
 						// Create and set the class selection menu
-						m.list = createClassSelectionMenu(classes)
+						layout := GetLayoutConfig(m.terminalSize)
+						m.list = createClassSelectionMenu(classes, layout.ListWidth, layout.ListHeight)
 						m.classList = classes
 						m.currentMenu = "Class Selection"
 						m.selectedItem = 0
@@ -285,7 +309,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.menuHistory = append(m.menuHistory, m.state)
 
 					// Create and set the class management menu
-					m.list = createClassManagementMenu(m.selectedClass)
+					layout := GetLayoutConfig(m.terminalSize)
+					m.list = createClassManagementMenu(m.selectedClass, layout.ListWidth, layout.ListHeight)
 					m.currentMenu = "Class Management: " + m.selectedClass
 					m.selectedItem = 0
 					m.state = stateClassManagement
@@ -536,7 +561,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								if err != nil {
 									return operationResultMsg{err: fmt.Errorf("Error fetching students for class '%s': %w", m.selectedClass, err)}
 								}
-								styledOutput, err := getStudentsCommitWeekViewActivity(m.selectedClass, studentUsernames)
+								styledOutput, err := getStudentsCommitWeekViewActivity(m.selectedClass, studentUsernames, m.terminalSize.Width)
 								if err != nil {
 									return operationResultMsg{err: fmt.Errorf("Error fetching GitHub week activity: %w", err)}
 								}
@@ -553,7 +578,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								if err != nil {
 									return operationResultMsg{err: fmt.Errorf("Error fetching students for class '%s': %w", m.selectedClass, err)}
 								}
-								styledOutput, err := getStudentsLatestCommitActivity(m.selectedClass, studentUsernames)
+								styledOutput, err := getStudentsLatestCommitActivity(m.selectedClass, studentUsernames, m.terminalSize.Width)
 								if err != nil {
 									return operationResultMsg{err: fmt.Errorf("Error fetching GitHub activity: %w", err)}
 								}
@@ -568,7 +593,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							// Restore the correct list and title for the previous state
 							switch m.state {
 							case stateClassManagement:
-								m.list = createClassManagementMenu(m.selectedClass)
+								layout := GetLayoutConfig(m.terminalSize)
+								m.list = createClassManagementMenu(m.selectedClass, layout.ListWidth, layout.ListHeight)
 								m.currentMenu = fmt.Sprintf("Managing Class: %s", m.selectedClass)
 							}
 							m.selectedItem = 0 // Reset selection for the previous menu
@@ -797,6 +823,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// Helper function to render content with optional breadcrumbs
+func renderWithBreadcrumb(content, breadcrumb string, layout LayoutConfig) string {
+	if layout.ShowBreadcrumbs && breadcrumb != "" {
+		return docStyle.Render(breadcrumb + "\n\n" + content)
+	}
+	return docStyle.Render(content)
+}
+
 func (m Model) View() string {
 	// Handle errors first
 	if m.err != nil {
@@ -805,16 +839,23 @@ func (m Model) View() string {
 		return docStyle.Render(errorMsg + "\n\nPress any key to continue.")
 	}
 
+	// Get current layout configuration
+	layout := GetLayoutConfig(m.terminalSize)
+
 	// Update breadcrumb path based on current state
 	breadcrumbPath := getBreadcrumbPath(m, m.currentMenu)
 	
-	// Create breadcrumb navigation
-	breadcrumb := buildBreadcrumb(breadcrumbPath)
+	// Create breadcrumb navigation (only if layout allows it)
+	var breadcrumb string
+	if layout.ShowBreadcrumbs {
+		breadcrumb = buildBreadcrumb(breadcrumbPath)
+	}
 
 	switch m.state {
 	case stateMainMenu:
 		// Use our new simple menu display with the selected item highlighted
-		return docStyle.Render(breadcrumb + "\n\n" + createSimpleMenuWithSelection("Student Code Viewer", m.menuItems, m.selectedItem))
+		content := createSimpleMenuWithSelection("Student Code Viewer", m.menuItems, m.selectedItem, layout)
+		return renderWithBreadcrumb(content, breadcrumb, layout)
 
 	case stateClassSelection:
 		// Convert class list to menu items and add a Back option
@@ -824,7 +865,8 @@ func (m Model) View() string {
 		}
 		// Add Back option as the last item
 		classItems[len(m.classList)] = Item{title: "Back", description: "Return to main menu"}
-		return docStyle.Render(breadcrumb + "\n\n" + createSimpleMenuWithSelection("Select a Class", classItems, m.selectedItem))
+		content := createSimpleMenuWithSelection("Select a Class", classItems, m.selectedItem, layout)
+		return renderWithBreadcrumb(content, breadcrumb, layout)
 
 	case stateClassManagement:
 		// Create class management menu items
@@ -835,7 +877,8 @@ func (m Model) View() string {
 			{title: "Delete Class", description: "Delete this class and its data"},
 			{title: "Back", description: "Return to main menu"},
 		}
-		return docStyle.Render(breadcrumb + "\n\n" + createSimpleMenuWithSelection("Managing Class: "+m.selectedClass, manageItems, m.selectedItem))
+		content := createSimpleMenuWithSelection("Managing Class: "+m.selectedClass, manageItems, m.selectedItem, layout)
+		return renderWithBreadcrumb(content, breadcrumb, layout)
 
 	case stateManageStudents:
 		// Create manage students menu items
@@ -844,7 +887,8 @@ func (m Model) View() string {
 			{title: "Delete Student", description: "Remove a student from this class"},
 			{title: "Back", description: "Return to class management menu"},
 		}
-		return docStyle.Render(breadcrumb + "\n\n" + createSimpleMenuWithSelection("Manage Students: "+m.selectedClass, studentManageItems, m.selectedItem))
+		content := createSimpleMenuWithSelection("Manage Students: "+m.selectedClass, studentManageItems, m.selectedItem, layout)
+		return renderWithBreadcrumb(content, breadcrumb, layout)
 
 	case stateStudentSelectionForDelete:
 		// Convert student list to menu items and add a Back option
@@ -854,7 +898,8 @@ func (m Model) View() string {
 		}
 		// Add Back option as the last item
 		studentDeleteItems[len(m.studentList)] = Item{title: "Back", description: "Return to manage students menu"}
-		return docStyle.Render(breadcrumb + "\n\n" + createSimpleMenuWithSelection("Delete Student from: "+m.selectedClass, studentDeleteItems, m.selectedItem))
+		content := createSimpleMenuWithSelection("Delete Student from: "+m.selectedClass, studentDeleteItems, m.selectedItem, layout)
+		return renderWithBreadcrumb(content, breadcrumb, layout)
 
 	case stateManageRepos:
 		// Create manage repositories menu items
@@ -864,7 +909,8 @@ func (m Model) View() string {
 			{title: "Clean All Repos", description: "Remove all cloned repositories for this class"},
 			{title: "Back", description: "Return to class management menu"},
 		}
-		return docStyle.Render(breadcrumb + "\n\n" + createSimpleMenuWithSelection("Manage Repositories: "+m.selectedClass, repoManageItems, m.selectedItem))
+		content := createSimpleMenuWithSelection("Manage Repositories: "+m.selectedClass, repoManageItems, m.selectedItem, layout)
+		return renderWithBreadcrumb(content, breadcrumb, layout)
 
 	case stateClassInput:
 		return docStyle.Render(
@@ -937,7 +983,8 @@ func (m Model) View() string {
 			{title: "Check Latest Activity", description: "Display the latest commit time for each student"},
 			{title: "Back", description: "Return to class management menu"},
 		}
-		return docStyle.Render(breadcrumb + "\n\n" + createSimpleMenuWithSelection("GitHub Activity for Class: "+m.selectedClass, ghActivityItems, m.selectedItem))
+		content := createSimpleMenuWithSelection("GitHub Activity for Class: "+m.selectedClass, ghActivityItems, m.selectedItem, layout)
+		return renderWithBreadcrumb(content, breadcrumb, layout)
 
 	default:
 		return docStyle.Render(breadcrumb + "\n\nUnknown state")
@@ -978,7 +1025,7 @@ func formatDurationAgo(d time.Duration) string {
 	return "just now"
 }
 
-func getStudentsLatestCommitActivity(className string, studentUsernames []string) (string, error) {
+func getStudentsLatestCommitActivity(className string, studentUsernames []string, terminalWidth int) (string, error) {
 	startTime := time.Now()
 
 	// Define styles inspired by the screenshot
@@ -994,13 +1041,16 @@ func getStudentsLatestCommitActivity(className string, studentUsernames []string
 		Foreground(lipgloss.Color("#E06BFF")). // Bright pink/purple
 		PaddingBottom(1)
 
+	// Calculate responsive table width
+	tableWidth := getResponsiveTableWidth(terminalWidth)
+	
 	// Title inside the table: "✨ GitHub Users & Their Last Commits ✨"
 	tableTitleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#FFD700")). // Gold for sparkles and text
 		Background(lipgloss.Color("#3A2D4C")). // Dark purple background
 		Padding(0, 1).
-		Width(50). // Approximate width to center text
+		Width(tableWidth). // Responsive width
 		Align(lipgloss.Center).
 		MarginBottom(1)
 
@@ -1046,15 +1096,19 @@ func getStudentsLatestCommitActivity(className string, studentUsernames []string
 	tableContentSb.WriteString(tableTitleStyle.Render("✨ GitHub Users & Their Last Commits ✨"))
 	tableContentSb.WriteString("\n")
 
+	// Calculate responsive column widths
+	userColWidth := max(15, tableWidth/3)
+	commitColWidth := max(25, tableWidth*2/3)
+	
 	// Column Headers Row
 	headerRow := lipgloss.JoinHorizontal(lipgloss.Top,
-		columnHeaderStyle.Copy().Width(15).Render(userIconPlaceholder+" User"),
-		columnHeaderStyle.Copy().Width(25).Render("Last Commit"),
+		columnHeaderStyle.Width(userColWidth).Render(userIconPlaceholder+" User"),
+		columnHeaderStyle.Width(commitColWidth).Render("Last Commit"),
 	)
 	tableContentSb.WriteString(headerRow)
 	tableContentSb.WriteString("\n")
-	// Divider line (simple one)
-	tableContentSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render(strings.Repeat("─", 50)))
+	// Divider line (responsive width)
+	tableContentSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#555555")).Render(strings.Repeat("─", tableWidth)))
 	tableContentSb.WriteString("\n")
 
 	// Data Rows - Fetch real GitHub data
@@ -1096,13 +1150,13 @@ func getStudentsLatestCommitActivity(className string, studentUsernames []string
 
 			userDisplay := userStyle.Render(studentName)
 			row := lipgloss.JoinHorizontal(lipgloss.Top,
-				lipgloss.NewStyle().Width(15).Render(fmt.Sprintf("%s %s", icon, userDisplay)),
-				lipgloss.NewStyle().Width(25).Render(fmt.Sprintf("%s %s", timeIcon, formattedTime)),
+				lipgloss.NewStyle().Width(userColWidth).Render(fmt.Sprintf("%s %s", icon, userDisplay)),
+				lipgloss.NewStyle().Width(commitColWidth).Render(fmt.Sprintf("%s %s", timeIcon, formattedTime)),
 			)
 			tableContentSb.WriteString(row)
 			tableContentSb.WriteString("\n")
 			if i < len(studentUsernames)-1 {
-				tableContentSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#444444")).Render(strings.Repeat("┈", 50)) + "\n")
+				tableContentSb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#444444")).Render(strings.Repeat("┈", tableWidth)) + "\n")
 			}
 		}
 	}
@@ -1112,7 +1166,7 @@ func getStudentsLatestCommitActivity(className string, studentUsernames []string
 		Foreground(lipgloss.Color("#AAAAAA")).
 		Background(lipgloss.Color("#302640")). // Slightly lighter than table title bg
 		Padding(0,1).
-		Width(50).
+		Width(tableWidth).
 		Align(lipgloss.Center).
 		MarginTop(1)
 	tableContentSb.WriteString(tableFooterStyle.Render("❖: *❖ charm-github v1.0.0 ❖*:❖"))
@@ -1128,7 +1182,7 @@ func getStudentsLatestCommitActivity(className string, studentUsernames []string
 	return sb.String(), nil
 }
 
-func getStudentsCommitWeekViewActivity(className string, studentUsernames []string) (string, error) {
+func getStudentsCommitWeekViewActivity(className string, studentUsernames []string, terminalWidth int) (string, error) {
 	startTime := time.Now()
 
 	// --- Styles ---
@@ -1147,9 +1201,10 @@ func getStudentsCommitWeekViewActivity(className string, studentUsernames []stri
 
 	// We're not using a fetching header in the minimalist design
 
-	// Column widths
-	usernameColWidth := 15
-	dateColWidth := 10
+	// Calculate responsive column widths
+	tableWidth := getResponsiveTableWidth(terminalWidth)
+	usernameColWidth := max(15, tableWidth/6)
+	dateColWidth := max(10, (tableWidth-usernameColWidth)/5) // 5 date columns
 
 	// Header cell style
 	headerCellStyle := lipgloss.NewStyle().
@@ -1162,7 +1217,7 @@ func getStudentsCommitWeekViewActivity(className string, studentUsernames []stri
 		BorderForeground(lipgloss.Color("#FFFFFF"))
 
 	// Username header cell style (first column)
-	usernameHeaderStyle := headerCellStyle.Copy().
+	usernameHeaderStyle := headerCellStyle.
 		Width(usernameColWidth).
 		Align(lipgloss.Center)
 
@@ -1176,7 +1231,7 @@ func getStudentsCommitWeekViewActivity(className string, studentUsernames []stri
 		BorderForeground(lipgloss.Color("#FFFFFF"))
 
 	// Username cell style (first column)
-	usernameCellStyle := cellStyle.Copy().
+	usernameCellStyle := cellStyle.
 		Width(usernameColWidth).
 		Align(lipgloss.Left).
 		Padding(0, 1, 0, 0)
@@ -1275,7 +1330,7 @@ func getStudentsCommitWeekViewActivity(className string, studentUsernames []stri
 	}
 
 	// Add a row divider after the header
-	divider := strings.Repeat("─", usernameColWidth + (dateColWidth * len(workDates)) + len(workDates))
+	divider := strings.Repeat("─", tableWidth)
 	rows = append(rows, rowDividerStyle.Render(divider))
 
 	// Data rows

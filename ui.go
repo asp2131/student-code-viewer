@@ -7,6 +7,23 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+// Responsive width calculation utilities
+func getResponsiveListWidth(terminalWidth int) int {
+	return max(40, min(terminalWidth-10, 80))
+}
+
+func getResponsiveListHeight(terminalHeight int) int {
+	return max(12, min(terminalHeight-8, 20))
+}
+
+func getResponsiveInputWidth(terminalWidth int) int {
+	return max(30, min(terminalWidth-20, 60))
+}
+
+func getResponsiveTableWidth(terminalWidth int) int {
+	return max(50, min(terminalWidth-10, 120))
+}
+
 // UI Styles
 var (
 	titleStyle = lipgloss.NewStyle().
@@ -69,12 +86,12 @@ const (
 )
 
 // createSimpleMenu creates a string-based menu display that shows all options at once
-func createSimpleMenu(title string, options []Item) string {
-	return createSimpleMenuWithSelection(title, options, 0)
+func createSimpleMenu(title string, options []Item, layout LayoutConfig) string {
+	return createSimpleMenuWithSelection(title, options, 0, layout)
 }
 
 // createSimpleMenuWithSelection creates a menu with a specific item selected
-func createSimpleMenuWithSelection(title string, options []Item, selectedIndex int) string {
+func createSimpleMenuWithSelection(title string, options []Item, selectedIndex int, layout LayoutConfig) string {
 	var sb strings.Builder
 
 	// Add title
@@ -87,15 +104,29 @@ func createSimpleMenuWithSelection(title string, options []Item, selectedIndex i
 			// Highlight the selected option
 			prefix = "→ "
 			sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF75B5")).Render(prefix+opt.title) + "\n")
-			sb.WriteString("  " + lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).Render(opt.description) + "\n\n")
+			
+			// Only show descriptions if layout allows it
+			if layout.ShowDescriptions && opt.description != "" {
+				sb.WriteString("  " + lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).Render(opt.description) + "\n")
+			}
+			sb.WriteString("\n")
 		} else {
 			sb.WriteString(prefix + opt.title + "\n")
-			sb.WriteString("  " + lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).Render(opt.description) + "\n\n")
+			
+			// Only show descriptions if layout allows it
+			if layout.ShowDescriptions && opt.description != "" {
+				sb.WriteString("  " + lipgloss.NewStyle().Foreground(lipgloss.Color("#AAAAAA")).Render(opt.description) + "\n")
+			}
+			sb.WriteString("\n")
 		}
 	}
 
-	// Add help text
-	sb.WriteString("\n" + helpStyle.Render("↑/k up • ↓/j down • enter select • q quit"))
+	// Add help text (make it more compact for small screens)
+	helpText := "↑/k up • ↓/j down • enter select • q quit"
+	if !layout.ShowDescriptions {
+		helpText = "↑/↓ nav • enter • q quit" // Shortened for compact mode
+	}
+	sb.WriteString("\n" + helpStyle.Render(helpText))
 
 	return sb.String()
 }
@@ -116,13 +147,13 @@ func buildBreadcrumb(path []string) string {
 }
 
 // createClassSelectionMenu creates a menu for selecting classes
-func createClassSelectionMenu(classes []string) list.Model {
+func createClassSelectionMenu(classes []string, width, height int) list.Model {
 	items := make([]list.Item, len(classes))
 	for i, class := range classes {
 		items[i] = Item{title: class, description: "Select to manage this class"}
 	}
 
-	l := list.New(items, list.NewDefaultDelegate(), 40, 12)
+	l := list.New(items, list.NewDefaultDelegate(), width, height)
 	l.Title = "Select a Class"
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
@@ -134,7 +165,7 @@ func createClassSelectionMenu(classes []string) list.Model {
 }
 
 // createClassManagementMenu creates a menu for managing a selected class
-func createClassManagementMenu(className string) list.Model {
+func createClassManagementMenu(className string, width, height int) list.Model {
 	items := []list.Item{
 		Item{title: "Manage Students", description: "Add or remove students"},
 		Item{title: "Manage Repos", description: "Clone, pull, or clean repositories"},
@@ -143,7 +174,7 @@ func createClassManagementMenu(className string) list.Model {
 		Item{title: "Back", description: "Return to main menu"},
 	}
 
-	l := list.New(items, list.NewDefaultDelegate(), 40, 12)
+	l := list.New(items, list.NewDefaultDelegate(), width, height)
 	l.Title = "Managing Class: " + className
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
@@ -155,14 +186,14 @@ func createClassManagementMenu(className string) list.Model {
 }
 
 // createViewGHActivityMenu creates a menu for viewing GitHub activity for a selected class
-func createViewGHActivityMenu(className string) list.Model {
+func createViewGHActivityMenu(className string, width, height int) list.Model {
 	items := []list.Item{
 		Item{title: "Week View", description: "View student activity for the past week"},
 		Item{title: "Check Latest Activity", description: "Display the latest commit time for each student."},
 		Item{title: "Back", description: "Return to class management menu"},
 	}
 
-	l := list.New(items, list.NewDefaultDelegate(), 40, 12)
+	l := list.New(items, list.NewDefaultDelegate(), width, height)
 	l.Title = "GH Activity for: " + className
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
